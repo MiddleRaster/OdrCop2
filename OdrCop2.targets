@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <!--
+    OdrCop.targets - generates a .i file alongside the normal .obj for every
+    ClCompile item. Add to a project with:
+      <Import Project="path\to\OdrCop.targets" />
+    just before </Project>.
+
+    .i files land in $(IntDir)odrcop\ for each configuration.
+  -->
+
+  <PropertyGroup>
+    <OdrCopOutDir>$(IntDir)odrcop\</OdrCopOutDir>
+  </PropertyGroup>
+
+  <Target Name="OdrCopPreprocess"
+          BeforeTargets="ClCompile"
+          Inputs="@(ClCompile)"
+          Outputs="@(ClCompile->'$(OdrCopOutDir)%(Filename).i')"
+          DependsOnTargets="$(CommonBuildOnlyTargets)">
+
+    <MakeDir Directories="$(OdrCopOutDir)" />
+
+    <!--
+      PreprocessToFile=true injects /P.
+      PreprocessSuppressLineNumbers=true would inject /EP (preprocess to stdout
+        without #line directives); we want false to keep #line directives in the .i.
+      TLog names are distinct from cl.read/write.1.tlog so the two passes
+        don't stomp each other's incremental state.
+      TrackFileAccess=false keeps the /P pass out of the dependency graph
+        that the normal /c pass relies on.
+    -->
+    <CL
+      Sources                            ="@(ClCompile)"
+      PreprocessToFile                   ="true"
+      PreprocessSuppressLineNumbers      ="false"
+      PreprocessKeepComments             ="false"
+      PreprocessOutputPath               ="$(OdrCopOutDir)"
+      AdditionalIncludeDirectories       ="%(ClCompile.AdditionalIncludeDirectories)"
+      AdditionalUsingDirectories         ="%(ClCompile.AdditionalUsingDirectories)"
+      PreprocessorDefinitions            ="%(ClCompile.PreprocessorDefinitions)"
+      UndefinePreprocessorDefinitions    ="%(ClCompile.UndefinePreprocessorDefinitions)"
+      UndefineAllPreprocessorDefinitions ="%(ClCompile.UndefineAllPreprocessorDefinitions)"
+      IgnoreStandardIncludePath          ="%(ClCompile.IgnoreStandardIncludePath)"
+      UseStandardPreprocessor            ="%(ClCompile.UseStandardPreprocessor)"
+      ForcedIncludeFiles                 ="%(ClCompile.ForcedIncludeFiles)"
+      ForcedUsingFiles                   ="%(ClCompile.ForcedUsingFiles)"
+      LanguageStandard                   ="%(ClCompile.LanguageStandard)"
+      LanguageStandard_C                 ="%(ClCompile.LanguageStandard_C)"
+      ConformanceMode                    ="%(ClCompile.ConformanceMode)"
+      CompileAs                          ="%(ClCompile.CompileAs)"
+      CompileAsManaged                   ="%(ClCompile.CompileAsManaged)"
+      DisableLanguageExtensions          ="%(ClCompile.DisableLanguageExtensions)"
+      UseFullPaths                       ="%(ClCompile.UseFullPaths)"
+      AdditionalOptions                  ="%(ClCompile.AdditionalOptions)"
+      TrackerLogDirectory                ="$(TLogLocation)"
+      TLogReadFiles                      ="$(TLogLocation)OdrCopPreprocess.read.1.tlog"
+      TLogWriteFiles                     ="$(TLogLocation)OdrCopPreprocess.write.1.tlog"
+      MinimalRebuildFromTracking         ="false"
+      TrackFileAccess                    ="false"
+    />
+
+  </Target>
+
+  <Target Name="OdrCopClean" AfterTargets="Clean">
+    <Delete Files="@(ClCompile->'$(OdrCopOutDir)%(Filename).i')" />
+    <RemoveDir Directories="$(OdrCopOutDir)" Condition="Exists('$(OdrCopOutDir)')" />
+  </Target>
+
+</Project>
