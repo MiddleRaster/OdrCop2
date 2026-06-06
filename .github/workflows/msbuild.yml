@@ -40,4 +40,6 @@ jobs:
 
       - name: Run TDD Tests
         run: |
-          .\x64\Release\tdd.exe
+          .\x64\Release\tdd.exe > output.txt
+          type output.txt
+          findstr /C:"0 failure(s) out of" output.txt
