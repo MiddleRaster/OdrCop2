@@ -74,4 +74,12 @@ namespace OdrCop2
             return std::make_unique<VisitorConsumer>(&CI.getASTContext(), functionInfos);
         }
     };
+    
+    class VisitorActionFactory : public clang::tooling::FrontendActionFactory
+    {
+        std::vector<OdrCop2::FunctionInfo>& functionInfos;
+    public:
+        explicit VisitorActionFactory(std::vector<OdrCop2::FunctionInfo>& functionInfos) : functionInfos(functionInfos) {}
+        std::unique_ptr<clang::FrontendAction> create() override { return std::make_unique<OdrCop2::VisitorAction>(functionInfos); }
+    };
 }

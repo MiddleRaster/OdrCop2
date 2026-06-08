@@ -100,22 +100,13 @@ int wmain(int argc, wchar_t** argv)
         return -1;
     }
 
-
     std::string error;
     auto compilations = clang::tooling::CompilationDatabase::loadFromDirectory(jsonFolder.string(), error);
     std::vector<std::string> files = compilations->getAllFiles();
     clang::tooling::ClangTool tool(*compilations, files);
 
-    class VisitorActionFactory : public clang::tooling::FrontendActionFactory
-    {
-        std::vector<OdrCop2::FunctionInfo>& functionInfos;
-    public:
-        explicit VisitorActionFactory(std::vector<OdrCop2::FunctionInfo>& functionInfos) : functionInfos(functionInfos) {}
-        std::unique_ptr<clang::FrontendAction> create() override { return std::make_unique<OdrCop2::VisitorAction>(functionInfos); }
-    };
-
     std::vector<OdrCop2::FunctionInfo> functionInfos;
-    VisitorActionFactory factory(functionInfos);
+    OdrCop2::VisitorActionFactory factory(functionInfos);
     tool.run(&factory);
 
     std::wcout << L"functions found:\n";
