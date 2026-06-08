@@ -5,6 +5,7 @@
 #include <clang\Frontend\FrontendActions.h>
 #include <clang\Frontend\CompilerInstance.h>
 #include <clang\Tooling\Tooling.h>
+#include <clang\Tooling\CompilationDatabase.h>
 using namespace clang;
 
 #include <vector>
@@ -71,17 +72,6 @@ namespace OdrCop2
         std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance& CI, llvm::StringRef InFile) override
         {
             return std::make_unique<VisitorConsumer>(&CI.getASTContext(), functionInfos);
-        }
-        bool BeginInvocation(CompilerInstance& CI) override
-        {   // don't allow Clang/LLVM to write to screen when there's a compiler error
-            struct SilentDiagConsumer : public clang::DiagnosticConsumer {
-                void HandleDiagnostic(clang::DiagnosticsEngine::Level level, const clang::Diagnostic& info) override {
-                    DiagnosticConsumer::HandleDiagnostic(level, info); // increments error count but don't print anything
-                }
-            };
-            CI.getDiagnosticOpts().ShowCarets = false;
-            CI.createDiagnostics(new SilentDiagConsumer(), true);
-            return true;
         }
     };
 }

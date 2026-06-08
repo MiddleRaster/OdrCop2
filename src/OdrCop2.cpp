@@ -88,57 +88,40 @@ int wmain(int argc, wchar_t** argv)
 {
     if (argc < 2)
     {
-        std::wcout << L"Usage: OdrCop2 <folder of .i files> [more folders ...]";
+        std::wcout << L"Usage: OdrCop2 <folder to compile_commands.json> ";
         return -1;
     }
 
-    std::vector<std::filesystem::path> preprocessedFiles;
-    for (int i=1; i<argc; ++i)
+    std::filesystem::path jsonFolder = argv[1];
+    std::error_code ec;
+    if (!std::filesystem::exists(jsonFolder, ec) || !std::filesystem::is_directory(jsonFolder, ec))
     {
-        std::filesystem::path root = argv[i];
-
-        std::error_code ec;
-        if (!std::filesystem::exists(root, ec) || !std::filesystem::is_directory(root, ec)) {
-            std::wcerr << L"Path not found or not a directory: " << root.wstring() << L'\n';
-            continue;
-        }
-
-        try
-        {
-            for (const auto& e : std::filesystem::recursive_directory_iterator(root, std::filesystem::directory_options::skip_permission_denied))
-            {
-                if (e.is_regular_file() && e.path().extension() == ".i") 
-                    preprocessedFiles.push_back(e.path());
-            }
-        }
-        catch (const std::filesystem::filesystem_error& ex)
-        {
-            std::wcerr << L"Filesystem error enumerating " << root.wstring() << L": " << ex.what() << L'\n';
-            continue;
-        }
-    }
-    if (preprocessedFiles.empty())
-    {
-        std::wcerr << L"No preprocessed .i files found\n";
+        std::wcerr << L"Path not found or not a directory: " << jsonFolder.wstring() << L'\n';
         return -1;
     }
 
-    for (auto& path : preprocessedFiles)
+
+    std::string error;
+    auto compilations = clang::tooling::CompilationDatabase::loadFromDirectory(jsonFolder.string(), error);
+    std::vector<std::string> files = compilations->getAllFiles();
+    clang::tooling::ClangTool tool(*compilations, files);
+
+    class VisitorActionFactory : public clang::tooling::FrontendActionFactory
     {
-        std::vector<OdrCop2::FunctionInfo> functionInfos;
+        std::vector<OdrCop2::FunctionInfo>& functionInfos;
+    public:
+        explicit VisitorActionFactory(std::vector<OdrCop2::FunctionInfo>& functionInfos) : functionInfos(functionInfos) {}
+        std::unique_ptr<clang::FrontendAction> create() override { return std::make_unique<OdrCop2::VisitorAction>(functionInfos); }
+    };
 
-        std::ifstream f(path, std::ios::binary);
-        std::string code{std::istreambuf_iterator<char>(f),std::istreambuf_iterator<char>()};
+    std::vector<OdrCop2::FunctionInfo> functionInfos;
+    VisitorActionFactory factory(functionInfos);
+    tool.run(&factory);
 
-        bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(functionInfos), code, { "-x", "c++-cpp-output" });
-        if (ok == false)
-            std::wcout << L"There were compiler errors in " << path.c_str() << L'\n';
-
-        std::wcout << L"functions found in: " << path.c_str() << L"\n";
-        for (const auto& fi : functionInfos)
-        {
-            std::cout << fi.fullyQualifiedName << '\n';
-        }
+    std::wcout << L"functions found:\n";
+    for (const auto& fi : functionInfos)
+    {
+        std::cout << fi.fullyQualifiedName << '\n';
     }
 
     return 0;
