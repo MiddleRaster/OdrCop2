@@ -4,7 +4,7 @@ There appears to be a paucity of ODR violation-detecting tools for MSVC, so I th
 
 ## How it works
 The idea is to do a clean build of your project while logging to a binlog file; e.g.,  
-```msbuild yourProject.vcxproj /t:clean /bl:some.binlog```.  
+```msbuild yourProject.vcxproj /t:rebuild /bl:some.binlog```.  
 Then run BL2OC.exe on that .binlog file to generate a ```compile_commands.json``` file, which OdrCop2.exe needs in order to use LLVM/Clang's AST, allowing ODR violations to be detected.
 
 
