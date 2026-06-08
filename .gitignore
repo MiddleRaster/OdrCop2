@@ -365,3 +365,4 @@ FodyWeavers.xsd
 # LLVM sdk (release asset)
 llvm/
 /getClangTooling.bat
+/compile_commands.json
