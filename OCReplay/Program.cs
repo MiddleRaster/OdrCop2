@@ -86,7 +86,7 @@ static string RewriteFlags(string[] tokens)
     // MSVC-only flags that clang-cl does not accept
     var drop = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "/JMC", "/Gm-", "/sdl", "/RTC1", "/analyze-",
+        "/c", "/JMC", "/Gm-", "/sdl", "/RTC1", "/analyze-",
         "/errorReport:queue", "/external:W3", "/ZI",
         "/FC", "/TP", "/Gd"
     };
