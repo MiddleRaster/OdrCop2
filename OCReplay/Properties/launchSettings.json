@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "OCReplay": {
+      "commandName": "Project",
+      "commandLineArgs": "C:\\Users\\Bill\\source\\repos\\OdrCop2\\binlog.binlog"
+    }
+  }
+}
