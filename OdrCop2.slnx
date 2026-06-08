@@ -4,7 +4,7 @@
     <Platform Name="x64" />
   </Configurations>
   <Project Path="demo/demo.vcxproj" Id="4720f1c6-c1f7-42e1-8fe0-7ed3f65d1799" />
-  <Project Path="OCReplay/OCReplay.csproj" Id="9c064a54-801f-4dc0-9c53-1e533f0c9f46" />
+  <Project Path="BL2OC/BL2OC.csproj" Id="9c064a54-801f-4dc0-9c53-1e533f0c9f46" />
   <Project Path="src/OdrCop2.vcxproj" Id="d5f7276f-fe7c-472f-b1a6-fbe2b9b79dbd" />
   <Project Path="tdd/tdd.vcxproj" Id="d729333d-cf4b-4e5d-aeb1-e53e54662016" />
 </Solution>
