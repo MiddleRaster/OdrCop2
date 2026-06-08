@@ -18,8 +18,16 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
       - name: Install MSBuild
         uses: microsoft/setup-msbuild@v1.3
+
+      - name: Restore NuGet packages
+        run: dotnet restore ${{ env.SOLUTION_FILE_PATH }}
 
       - name: Download LLVM SDK
         env:
