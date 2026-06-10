@@ -15,6 +15,8 @@ namespace OdrCop2
 {
     struct FunctionInfo
     {
+        const std::string TU;
+
         struct QualifiedAndCanonical
         {
             const std::string fullyQualifiedReturnValueTypeName;
@@ -28,12 +30,13 @@ namespace OdrCop2
 
     class FunctionVisitor : public RecursiveASTVisitor<FunctionVisitor>
     {
+        const std::string TU;
         ASTContext* context;
         std::vector<FunctionInfo>& functionInfos;
-
     public:
-        FunctionVisitor(ASTContext* context, std::vector<FunctionInfo>& functionInfos)
-            : context      (context)
+        FunctionVisitor(ASTContext* context, std::vector<FunctionInfo>& functionInfos, const std::string& TU)
+            : TU           (TU)
+            , context      (context)
             , functionInfos(functionInfos)
         {}
         bool VisitFunctionDecl(FunctionDecl* funcDecl)
@@ -45,7 +48,8 @@ namespace OdrCop2
                 //  .getCanonicalType().getAsString() 
                 //  to get the fully resolved type without typedefs.For ODR purposes you'll want canonical types.
 
-                functionInfos.push_back({funcDecl->getQualifiedNameAsString(),
+                functionInfos.push_back({TU,
+                                         funcDecl->getQualifiedNameAsString(),
                                             {funcDecl->getReturnType().getAsString(), funcDecl->getReturnType().getCanonicalType().getAsString()}
                                         });
             }
@@ -57,7 +61,7 @@ namespace OdrCop2
     {
         FunctionVisitor visitor;
     public:
-        VisitorConsumer(ASTContext* context, std::vector<FunctionInfo>& functionInfos) : visitor(context, functionInfos) {}
+        VisitorConsumer(ASTContext* context, std::vector<FunctionInfo>& functionInfos, const std::string& TU) : visitor(context, functionInfos, TU) {}
         void HandleTranslationUnit(ASTContext& context) override
         {
             visitor.TraverseDecl(context.getTranslationUnitDecl());
@@ -71,7 +75,7 @@ namespace OdrCop2
         explicit VisitorAction(std::vector<FunctionInfo>& functionInfos) : functionInfos(functionInfos) {}
         std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance& CI, llvm::StringRef InFile) override
         {
-            return std::make_unique<VisitorConsumer>(&CI.getASTContext(), functionInfos);
+            return std::make_unique<VisitorConsumer>(&CI.getASTContext(), functionInfos, InFile.str());
         }
     };
     

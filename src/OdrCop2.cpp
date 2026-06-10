@@ -112,7 +112,7 @@ int wmain(int argc, wchar_t** argv)
     std::wcout << L"functions found:\n";
     for (const auto& fi : functionInfos)
     {
-        std::cout << fi.fullyQualifiedName << '\n';
+        std::cout << fi.TU << ": " << fi.returnType.fullyQualifiedReturnValueTypeName << " " << fi.fullyQualifiedName << '\n';
     }
 
     return 0;
