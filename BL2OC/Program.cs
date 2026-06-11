@@ -94,7 +94,7 @@ static string RewriteFlags(string[] tokens)
     // Flag prefixes to drop (flags that take an argument concatenated)
     var dropPrefixes = new[]
     {
-        "/Fd", "/Fo", "/external:"
+        "/Fd", "/external:" // , "/Fo" // keeping /Fo so that OdrCop2 can find the .obj files for the COFF reader
     };
 
     var kept = new List<string>();

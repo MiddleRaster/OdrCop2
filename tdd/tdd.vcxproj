@@ -160,6 +160,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="JsonTests.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="InitialTests.cpp" />
     <ClCompile Include="modules\tdd20.ixx">
