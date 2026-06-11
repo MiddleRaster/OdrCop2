@@ -5,6 +5,7 @@ import tdd20;
 using namespace TDD20;
 
 #include "..\src\ASTVisitor.h"
+#include <DbgHelp.h>
 
 Test ExploratoryTestsOfClangAST[] =
 {
@@ -101,6 +102,20 @@ IamAtypedef foo() { return 42; }
             Assert::IsTrue(ok);
             Assert::AreEqual("IamAtypedef", functionInfos[0].returnType.fullyQualifiedReturnValueTypeName, "should return typedef'd return type");
             Assert::AreEqual("int",         functionInfos[0].returnType.canonicalizedReturnValuetypeName,  "should return canonicalized return type");
+        }
+    },
+
+    {"Get mangled function name", []
+        {
+            std::string code = "int foo() { return 42; }";
+            std::vector<OdrCop2::FunctionInfo> functionInfos;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(functionInfos), code, { "-x", "c++-cpp-output" });
+            Assert::IsTrue(ok);
+            Assert::AreEqual("?foo@@YAHXZ", functionInfos[0].mangledName, "should return the mangled name");
+
+            char buf[1024];
+            DWORD result = UnDecorateSymbolName(functionInfos[0].mangledName.c_str(), buf, static_cast<DWORD>(sizeof(buf)), UNDNAME_COMPLETE );
+            Assert::AreEqual("int __cdecl foo(void)", std::string(buf, result), "should unmangle back to original function name");
         }
     },
 };

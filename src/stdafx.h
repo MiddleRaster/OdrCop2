@@ -5,6 +5,11 @@
 #include <clang\Frontend\FrontendActions.h>
 #include <clang\Frontend\CompilerInstance.h>
 #include <clang\Tooling\Tooling.h>
+#include <clang\Tooling\CompilationDatabase.h>
+#include <clang\AST\Mangle.h>
+#include <clang\AST\Decl.h>
+#include <clang\AST\GlobalDecl.h>
+#include <llvm\Support\raw_ostream.h>
 using namespace clang;
 
 #include <vector>

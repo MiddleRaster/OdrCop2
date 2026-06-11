@@ -6,10 +6,13 @@
 #include <clang\Frontend\CompilerInstance.h>
 #include <clang\Tooling\Tooling.h>
 #include <clang\Tooling\CompilationDatabase.h>
+#include <clang\AST\Mangle.h>
+#include <clang\AST\Decl.h>
+#include <clang\AST\GlobalDecl.h>
+#include <llvm\Support\raw_ostream.h>
 using namespace clang;
 
 #include <vector>
-
 
 namespace OdrCop2
 {
@@ -23,6 +26,7 @@ namespace OdrCop2
             const std::string  canonicalizedReturnValuetypeName;
         };
         const std::string fullyQualifiedName;
+        const std::string mangledName;
         const QualifiedAndCanonical returnType;
 
         // add more: args, static, inline, method/function, friend, noexcept, default, etc.
@@ -41,19 +45,37 @@ namespace OdrCop2
         {}
         bool VisitFunctionDecl(FunctionDecl* funcDecl)
         {
+            if (context->getSourceManager().isInSystemHeader(funcDecl->getLocation()))
+                return true; // Skip anything not in the main file or a user header
+
             if (funcDecl->isThisDeclarationADefinition())
             {
-                //  funcDecl->getReturnType() gives you a QualType.From that you can call
-                //  .getAsString() for a human - readable form, or
-                //  .getCanonicalType().getAsString() 
-                //  to get the fully resolved type without typedefs.For ODR purposes you'll want canonical types.
-
                 functionInfos.push_back({TU,
                                          funcDecl->getQualifiedNameAsString(),
-                                            {funcDecl->getReturnType().getAsString(), funcDecl->getReturnType().getCanonicalType().getAsString()}
+                                         getMSVCMangledName(funcDecl, *context),
+                                         {funcDecl->getReturnType().getAsString(), funcDecl->getReturnType().getCanonicalType().getAsString()}
                                         });
             }
             return true;
+        }
+    private:
+        static std::string getMSVCMangledName(const clang::FunctionDecl* funcDecl, clang::ASTContext& Ctx)
+        {
+            std::unique_ptr<clang::MangleContext> mangleContext(Ctx.createMangleContext());
+
+            if (!mangleContext->shouldMangleDeclName(funcDecl))
+                return funcDecl->getNameAsString();
+
+            std::string out;
+            llvm::raw_string_ostream oStream(out);
+
+            if (auto* ctorDecl = llvm::dyn_cast<clang::CXXConstructorDecl>(funcDecl))        // Constructors
+                mangleContext->mangleName(clang::GlobalDecl(ctorDecl, clang::Ctor_Complete), oStream);
+            else if (auto* dtorDecl = llvm::dyn_cast<clang::CXXDestructorDecl>(funcDecl))    // Destructors
+                mangleContext->mangleName(clang::GlobalDecl(dtorDecl, clang::Dtor_Complete), oStream);
+            else
+                mangleContext->mangleCXXName(funcDecl, oStream);                             // Ordinary C++ functions
+            return out;
         }
     };
 
