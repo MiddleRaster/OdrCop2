@@ -10,3 +10,5 @@ using namespace clang;
 #include <vector>
 
 #include <windows.h>
+#include <io.h>
+#include <fcntl.h>
