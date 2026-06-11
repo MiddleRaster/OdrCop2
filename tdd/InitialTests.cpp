@@ -104,7 +104,6 @@ IamAtypedef foo() { return 42; }
             Assert::AreEqual("int",         functionInfos[0].returnType.canonicalizedReturnValuetypeName,  "should return canonicalized return type");
         }
     },
-
     {"Get mangled function name", []
         {
             std::string code = "int foo() { return 42; }";
@@ -116,6 +115,18 @@ IamAtypedef foo() { return 42; }
             char buf[1024];
             DWORD result = UnDecorateSymbolName(functionInfos[0].mangledName.c_str(), buf, static_cast<DWORD>(sizeof(buf)), UNDNAME_COMPLETE );
             Assert::AreEqual("int __cdecl foo(void)", std::string(buf, result), "should unmangle back to original function name");
+        }
+    },
+    {"Get some function args", []
+        {
+            std::string code = "int foo(char* p, bool b) { (void)p; (void)b; return 42; }";
+            std::vector<OdrCop2::FunctionInfo> functionInfos;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(functionInfos), code, { "-x", "c++-cpp-output" });
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(2, functionInfos[0].args.size(), "should have found 2 args");
+            Assert::AreEqual("char * p", functionInfos[0].args[0], "should have found the type and name");
+            Assert::AreEqual("bool b",   functionInfos[0].args[1], "should have found the type and name");
         }
     },
 };

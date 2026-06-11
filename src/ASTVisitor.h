@@ -29,6 +29,8 @@ namespace OdrCop2
         const std::string mangledName;
         const QualifiedAndCanonical returnType;
 
+        const std::vector<std::string> args;
+
         // add more: args, static, inline, method/function, friend, noexcept, default, etc.
     };
 
@@ -36,11 +38,13 @@ namespace OdrCop2
     {
         const std::string TU;
         ASTContext* context;
+        PrintingPolicy printPolicy;
         std::vector<FunctionInfo>& functionInfos;
     public:
         FunctionVisitor(ASTContext* context, std::vector<FunctionInfo>& functionInfos, const std::string& TU)
             : TU           (TU)
             , context      (context)
+            , printPolicy  (context->getLangOpts())
             , functionInfos(functionInfos)
         {}
         bool VisitFunctionDecl(FunctionDecl* funcDecl)
@@ -50,10 +54,21 @@ namespace OdrCop2
 
             if (funcDecl->isThisDeclarationADefinition())
             {
+                std::vector<std::string> args;
+
+                for (const clang::ParmVarDecl* paramDecl : funcDecl->parameters())
+                {
+                    clang::QualType paramType = paramDecl->getType();
+                    llvm::StringRef paramName = paramDecl->getName();
+                    std::string prettyStr     = paramType.getAsString(printPolicy); // use printing policy to use C++ names, rather than C names
+                    args.push_back(prettyStr + " " + paramName.str());
+                }
+
                 functionInfos.push_back({TU,
                                          funcDecl->getQualifiedNameAsString(),
                                          getMSVCMangledName(funcDecl, *context),
-                                         {funcDecl->getReturnType().getAsString(), funcDecl->getReturnType().getCanonicalType().getAsString()}
+                                         {funcDecl->getReturnType().getAsString(), funcDecl->getReturnType().getCanonicalType().getAsString()},
+                                         std::move(args)
                                         });
             }
             return true;
