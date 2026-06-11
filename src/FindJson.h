@@ -91,7 +91,7 @@ namespace OdrCop2
                         continue;
                     }
                     // handle all the rest of the switches that may take a second parameter
-                            if (arg == "/Fa") ++j;
+                         if (arg == "/Fa") ++j;
                     else if (arg == "/Fd") ++j;
                     else if (arg == "/Fe") ++j;
                     else if (arg == "/Fp") ++j;
