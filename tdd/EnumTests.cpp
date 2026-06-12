@@ -47,7 +47,7 @@ Test EnumTests[] =
 
             Assert::AreEqual("tu1.cpp", vec[0].TU, "tu1 should be first");
             Assert::AreEqual("tu2.cpp", vec[1].TU, "tu2 should be second");
-            Assert::AreEqual("tu3.cpp", vec[2].TU, "tu3 should be second");
+            Assert::AreEqual("tu3.cpp", vec[2].TU, "tu3 should be third");
 
             Assert::AreEqual("enum class Hi::Color : int " "{ Red=0, Green=1, Blue=2 };", vec[0].fullyQualified, "should have 'class' and underlying type");
             Assert::AreEqual("enum"    " Hi::Color "       "{ Red=0, Green=1, Blue=2 };", vec[1].fullyQualified, "should not have 'class' nor underlying type");

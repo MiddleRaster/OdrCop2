@@ -27,6 +27,11 @@ namespace OdrCop2
     struct EnumInfo
     {
         const std::string TU;
+        const std::string fullyQualified;
+    };
+    struct TypedefInfo
+    {
+        const std::string TU;
         const std::string fullyQualified; // enum class Color : uint8_t { Red=1, Green=2, Blue=3, };
         // key should be: nested namespaces,nested struct/class,name
     };
@@ -34,7 +39,8 @@ namespace OdrCop2
     {
         std::map<std::string,std::vector<FunctionInfo>> functionMap;
         std::map<std::string,std::vector<    EnumInfo>>     enumMap;
-        // udt, typedef
+        std::map<std::string,std::vector< TypedefInfo>>  typedefMap;
+        // udt
     };
 
     class TheVisitor : public RecursiveASTVisitor<TheVisitor>
@@ -95,6 +101,17 @@ namespace OdrCop2
                 
                 maps.enumMap[prettyEnum].push_back({TU, fqe});
             }
+            return true;
+        }
+        bool VisitTypedefNameDecl(clang::TypedefNameDecl* typedefDecl)
+        {
+            if (context->getSourceManager().isInSystemHeader(typedefDecl->getLocation()))
+                return true; // skip anything not in the main file or a user header
+
+            std::string aliasName    = typedefDecl->getQualifiedNameAsString();
+            std::string resolvedType = typedefDecl->getUnderlyingType().getCanonicalType().getAsString(printPolicy);
+            std::string fqtd         = aliasName + " = " + resolvedType;
+            maps.typedefMap[aliasName].push_back({TU, fqtd});
             return true;
         }
 
