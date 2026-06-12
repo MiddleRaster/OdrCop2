@@ -16,3 +16,6 @@ using namespace clang;
 #include <iostream>
 #include <fstream>
 #include <filesystem>
+
+#include <windows.h>
+#include <DbgHelp.h>

@@ -30,21 +30,7 @@ int wmain(int argc, wchar_t** argv)
     std::wcout << L"functions found:\n";
     for (const auto& fi : functionInfos)
     {
-        std::cout << fi.TU << ": " << fi.returnType.fullyQualifiedReturnValueTypeName << " " << fi.fullyQualifiedName;
-        
-        if (fi.args.size() == 0)
-            std::cout << "();\n";
-        else {
-            for(size_t i=0; i<fi.args.size(); ++i)
-            {
-                if (i == 0)
-                    std::cout << "(";
-                std::cout << fi.args[i];
-                if (i+1 != fi.args.size())
-                    std::cout << ", ";
-            }
-            std::cout << ");\n";
-        }
+        std::cout << fi.TU << ": " << fi.fullyQualified << '\n';
     }
 
     return 0;

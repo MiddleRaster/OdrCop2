@@ -14,24 +14,15 @@ using namespace clang;
 
 #include <vector>
 
+#include <windows.h>
+
 namespace OdrCop2
 {
     struct FunctionInfo
     {
         const std::string TU;
-
-        struct QualifiedAndCanonical
-        {
-            const std::string fullyQualifiedReturnValueTypeName;
-            const std::string  canonicalizedReturnValuetypeName;
-        };
-        const std::string fullyQualifiedName;
-        const std::string mangledName;
-        const QualifiedAndCanonical returnType;
-
-        const std::vector<std::string> args;
-
-        // add more: args, static, inline, method/function, friend, noexcept, default, etc.
+        const std::string mangled;
+        const std::string fullyQualified;
     };
 
     class FunctionVisitor : public RecursiveASTVisitor<FunctionVisitor>
@@ -50,36 +41,34 @@ namespace OdrCop2
         bool VisitFunctionDecl(FunctionDecl* funcDecl)
         {
             if (context->getSourceManager().isInSystemHeader(funcDecl->getLocation()))
-                return true; // Skip anything not in the main file or a user header
+                return true; // skip anything not in the main file or a user header
 
             if (funcDecl->isThisDeclarationADefinition())
             {
-                std::vector<std::string> args;
+                auto mangledName = getMSVCMangledName(funcDecl, *context);
 
-                for (const clang::ParmVarDecl* paramDecl : funcDecl->parameters())
-                {
-                    clang::QualType paramType = paramDecl->getType();
-                    llvm::StringRef paramName = paramDecl->getName();
-                    std::string prettyStr     = paramType.getAsString(printPolicy); // use printing policy to use C++ names, rather than C names
-                    args.push_back(prettyStr + " " + paramName.str());
-                }
+                std::string fqn;
+                char buf[1024*16] = {'\0'};
+                DWORD result = UnDecorateSymbolName(mangledName.c_str(), buf, static_cast<DWORD>(sizeof(buf)), UNDNAME_COMPLETE);
+                if (result)
+                    fqn = std::string(buf);
+                else
+                    fqn = mangledName;
 
-                functionInfos.push_back({TU,
-                                         funcDecl->getQualifiedNameAsString(),
-                                         getMSVCMangledName(funcDecl, *context),
-                                         {funcDecl->getReturnType().getAsString(), funcDecl->getReturnType().getCanonicalType().getAsString()},
-                                         std::move(args)
-                                        });
+                functionInfos.push_back({TU, getMSVCMangledName(funcDecl, *context), fqn});
             }
             return true;
         }
     private:
-        static std::string getMSVCMangledName(const clang::FunctionDecl* funcDecl, clang::ASTContext& Ctx)
+        std::string getMSVCMangledName(const clang::FunctionDecl* funcDecl, clang::ASTContext& Ctx)
         {
             std::unique_ptr<clang::MangleContext> mangleContext(Ctx.createMangleContext());
 
             if (!mangleContext->shouldMangleDeclName(funcDecl))
-                return funcDecl->getNameAsString();
+            {   // C APIs (like DllMain and main) trigger this path.
+                std::string display = funcDecl->getType().getAsString(printPolicy);
+                return display.replace(display.find('('), 0, funcDecl->getNameAsString());
+            }
 
             std::string out;
             llvm::raw_string_ostream oStream(out);
@@ -87,7 +76,7 @@ namespace OdrCop2
             if (auto* ctorDecl = llvm::dyn_cast<clang::CXXConstructorDecl>(funcDecl))        // Constructors
                 mangleContext->mangleName(clang::GlobalDecl(ctorDecl, clang::Ctor_Complete), oStream);
             else if (auto* dtorDecl = llvm::dyn_cast<clang::CXXDestructorDecl>(funcDecl))    // Destructors
-                mangleContext->mangleName(clang::GlobalDecl(dtorDecl, clang::Dtor_Complete), oStream);
+                mangleContext->mangleName(clang::GlobalDecl(dtorDecl, clang::Dtor_Base /* N.B: not Dtor_Complete */), oStream);
             else
                 mangleContext->mangleCXXName(funcDecl, oStream);                             // Ordinary C++ functions
             return out;

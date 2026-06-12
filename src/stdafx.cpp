@@ -78,3 +78,4 @@
 #pragma comment(lib, "version.lib")
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "Ntdll.lib")
+#pragma comment(lib, "DbgHelp.lib")
