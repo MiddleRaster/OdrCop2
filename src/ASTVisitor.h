@@ -73,6 +73,15 @@ namespace OdrCop2
                 else
                     fqn = mangledName;
 
+                const FunctionTemplateDecl* funcTmpltDecl = funcDecl->getDescribedFunctionTemplate();
+                if (funcTmpltDecl != nullptr && !funcDecl->getTemplateSpecializationInfo())
+                {   // only uninstantiated templates go through this path
+                    std::string out;
+                    llvm::raw_string_ostream oStream(out);
+                    funcTmpltDecl->print(oStream, printPolicy);
+                    fqn = out;
+                }
+
                 maps.functionMap[mangledName].push_back({TU, getMSVCMangledName(funcDecl, *context), fqn});
             }
             return true;

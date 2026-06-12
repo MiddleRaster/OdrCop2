@@ -115,4 +115,21 @@ IamAtypedef foo() { return 42; }
             Assert::AreEqual("int __cdecl foo(char * __ptr64,bool)", vec[0].fullyQualified, "should have found function");
         }
     },
+    {"uninstantiated function templates and specializations work", []
+        {
+            std::string code = "template <typename T> T   foo     (const T  & t) { return t  ; }"
+                               "template <          > int foo<int>(const int& i) { return i+1; }";
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            Assert::IsTrue(ok);
+            Assert::AreEqual(2, maps.functionMap.size(), "there should be two different typedefs in the map");
+
+            auto it1 = maps.functionMap.begin();
+            auto it2 = std::next(it1);
+
+            // alphabetized by key, so the specialization comes first
+            Assert::AreEqual("int __cdecl foo<int>(int const & __ptr64)", it1->second[0].fullyQualified, "should have found the function template specialization");
+            Assert::AreEqual("template <typename T> T foo(const T &t)",   it2->second[0].fullyQualified, "should have found the function template");
+        }
+    },
 };
