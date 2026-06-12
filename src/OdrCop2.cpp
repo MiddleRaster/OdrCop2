@@ -23,14 +23,15 @@ int wmain(int argc, wchar_t** argv)
     std::vector<std::string> files = compilations->getAllFiles();
     clang::tooling::ClangTool tool(*compilations, files);
 
-    std::vector<OdrCop2::FunctionInfo> functionInfos;
-    OdrCop2::VisitorActionFactory factory(functionInfos);
+    OdrCop2::AllMaps maps;
+    OdrCop2::VisitorActionFactory factory(maps);
     tool.run(&factory);
 
     std::wcout << L"functions found:\n";
-    for (const auto& fi : functionInfos)
+    for (const auto& [key, vec] : maps.functionMap)
     {
-        std::cout << fi.TU << ": " << fi.fullyQualified << '\n';
+        for(auto& fi : vec)
+            std::cout << fi.TU << ": " << fi.fullyQualified << '\n';
     }
 
     return 0;

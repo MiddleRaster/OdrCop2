@@ -24,19 +24,31 @@ namespace OdrCop2
         const std::string mangled;
         const std::string fullyQualified;
     };
+    struct EnumInfo
+    {
+        const std::string TU;
+        const std::string fullyQualified; // enum class Color : uint8_t { Red=1, Green=2, Blue=3, };
+        // key should be: nested namespaces,nested struct/class,name
+    };
+    struct AllMaps
+    {
+        std::map<std::string,std::vector<FunctionInfo>> functionMap;
+        std::map<std::string,std::vector<    EnumInfo>>     enumMap;
+        // udt, typedef
+    };
 
-    class FunctionVisitor : public RecursiveASTVisitor<FunctionVisitor>
+    class TheVisitor : public RecursiveASTVisitor<TheVisitor>
     {
         const std::string TU;
         ASTContext* context;
-        PrintingPolicy printPolicy;
-        std::vector<FunctionInfo>& functionInfos;
+        const PrintingPolicy printPolicy;
+        AllMaps& maps;
     public:
-        FunctionVisitor(ASTContext* context, std::vector<FunctionInfo>& functionInfos, const std::string& TU)
+        TheVisitor(ASTContext* context, AllMaps& maps, const std::string& TU)
             : TU           (TU)
             , context      (context)
             , printPolicy  (context->getLangOpts())
-            , functionInfos(functionInfos)
+            , maps         (maps)
         {}
         bool VisitFunctionDecl(FunctionDecl* funcDecl)
         {
@@ -55,10 +67,36 @@ namespace OdrCop2
                 else
                     fqn = mangledName;
 
-                functionInfos.push_back({TU, getMSVCMangledName(funcDecl, *context), fqn});
+                maps.functionMap[mangledName].push_back({TU, getMSVCMangledName(funcDecl, *context), fqn});
             }
             return true;
         }
+        bool VisitEnumDecl(clang::EnumDecl* enumDecl)
+        {
+            if (context->getSourceManager().isInSystemHeader(enumDecl->getLocation()))
+                return true; // skip anything not in the main file or a user header
+
+            if (enumDecl->isThisDeclarationADefinition())
+            {
+                clang::QualType underlyingType = enumDecl->getIntegerType();
+                bool            isScoped = enumDecl->isScoped();   // enum class vs enum
+                std::string     enumName = enumDecl->getNameAsString();
+                std::string   prettyEnum = enumDecl->getQualifiedNameAsString();
+
+                std::string fqe = "enum " + prettyEnum + " { ";
+                for (const clang::EnumConstantDecl* enumeratorDecl : enumDecl->enumerators())
+                {
+                    std::string enumeratorName = enumeratorDecl->getName().str();
+                    std::string val            = llvm::toString(enumeratorDecl->getInitVal(), 10);
+                    fqe += enumeratorName  +  "="  +  val + ", ";
+                }
+                fqe += "};";
+                
+                maps.enumMap[prettyEnum].push_back({TU, fqe});
+            }
+            return true;
+        }
+
     private:
         std::string getMSVCMangledName(const clang::FunctionDecl* funcDecl, clang::ASTContext& Ctx)
         {
@@ -85,9 +123,9 @@ namespace OdrCop2
 
     class VisitorConsumer : public ASTConsumer
     {
-        FunctionVisitor visitor;
+        TheVisitor visitor;
     public:
-        VisitorConsumer(ASTContext* context, std::vector<FunctionInfo>& functionInfos, const std::string& TU) : visitor(context, functionInfos, TU) {}
+        VisitorConsumer(ASTContext* context, AllMaps& maps, const std::string& TU) : visitor(context, maps, TU) {}
         void HandleTranslationUnit(ASTContext& context) override
         {
             visitor.TraverseDecl(context.getTranslationUnitDecl());
@@ -96,20 +134,20 @@ namespace OdrCop2
 
     class VisitorAction : public ASTFrontendAction
     {
-        std::vector<FunctionInfo>& functionInfos;
+        AllMaps& maps;
     public:
-        explicit VisitorAction(std::vector<FunctionInfo>& functionInfos) : functionInfos(functionInfos) {}
+        explicit VisitorAction(AllMaps& maps) : maps(maps) {}
         std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance& CI, llvm::StringRef InFile) override
         {
-            return std::make_unique<VisitorConsumer>(&CI.getASTContext(), functionInfos, InFile.str());
+            return std::make_unique<VisitorConsumer>(&CI.getASTContext(), maps, InFile.str());
         }
     };
-    
+
     class VisitorActionFactory : public clang::tooling::FrontendActionFactory
     {
-        std::vector<OdrCop2::FunctionInfo>& functionInfos;
+        AllMaps& maps;
     public:
-        explicit VisitorActionFactory(std::vector<OdrCop2::FunctionInfo>& functionInfos) : functionInfos(functionInfos) {}
-        std::unique_ptr<clang::FrontendAction> create() override { return std::make_unique<OdrCop2::VisitorAction>(functionInfos); }
+        explicit VisitorActionFactory(AllMaps& maps) : maps(maps) {}
+        std::unique_ptr<clang::FrontendAction> create() override { return std::make_unique<VisitorAction>(maps); }
     };
 }
