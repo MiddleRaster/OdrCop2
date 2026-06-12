@@ -78,19 +78,20 @@ namespace OdrCop2
 
             if (enumDecl->isThisDeclarationADefinition())
             {
-                clang::QualType underlyingType = enumDecl->getIntegerType();
-                bool            isScoped = enumDecl->isScoped();   // enum class vs enum
-                std::string     enumName = enumDecl->getNameAsString();
-                std::string   prettyEnum = enumDecl->getQualifiedNameAsString();
+                std::string underlyingType = enumDecl->getIntegerType().getCanonicalType().getAsString();
+                bool              isScoped = enumDecl->isScoped();   // enum class vs enum
+                bool               isFixed = enumDecl->isFixed();
+                std::string       enumName = enumDecl->getNameAsString();
+                std::string     prettyEnum = enumDecl->getQualifiedNameAsString();
 
-                std::string fqe = "enum " + prettyEnum + " { ";
+                std::string fqe = (isScoped ? "enum class " : "enum ") + prettyEnum + (isFixed ? " : " + underlyingType : "") + " { ";
                 for (const clang::EnumConstantDecl* enumeratorDecl : enumDecl->enumerators())
                 {
                     std::string enumeratorName = enumeratorDecl->getName().str();
                     std::string val            = llvm::toString(enumeratorDecl->getInitVal(), 10);
                     fqe += enumeratorName  +  "="  +  val + ", ";
                 }
-                fqe += "};";
+                fqe = fqe.substr(0, fqe.size()-2) + " };";
                 
                 maps.enumMap[prettyEnum].push_back({TU, fqe});
             }
