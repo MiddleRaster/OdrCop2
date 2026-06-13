@@ -150,3 +150,92 @@ struct Pixel
         }
     },
 };
+
+struct EnumOdrViolationReporter
+{
+/*
+ODR VIOLATION: Hi::Color
+  [tu1.cpp]
+    enum class Hi::Color : int { Red=0, Green=1, Blue=2 };
+  [tu2.cpp]
+    enum Hi::Color { Red=0, Green=1, Blue=2 };
+  [tu3.cpp]
+    enum Hi::Color : int { Red=0, Green=1, Blue=2 };
+*/
+    static int ReportOdrViolations(const std::map<std::string, std::vector<OdrCop2::EnumInfo>>& map, auto&& out)
+    {
+        int violationCount = 0;
+        for (auto& [name, items] : map)
+        {
+            if (items.size() < 2)
+                continue;
+
+            //if (true == skipAnonymous(items[0]))
+            //    continue;
+
+            if (std::all_of(items.begin() + 1, items.end(), [&](const auto& x) { return x == items[0]; }))
+                continue;
+
+            // find mismatch index
+            //int mismatch = -1;
+            //for (size_t m = 1; m < items.size(); ++m)
+            //{
+            //    if (-1 != (mismatch = getMismatchIndex(items[0], items[m])))
+            //        break;
+            //}
+
+            ++violationCount;
+            out << "ODR VIOLATION: " << name << '\n';
+
+            std::vector<bool> printed(items.size(), false);
+            for (size_t i=0; i<items.size(); ++i)
+            {
+                if (printed[i])
+                    continue;
+
+                out << "  ["  << items[i].TU << "]\n";
+                out << "    " << items[i].fullyQualified << '\n';
+                printed[i] = true;
+
+                for (size_t j=i+1; j<items.size(); ++j)
+                {
+                    if (!printed[j] && (items[i] == items[j]))
+                    {
+                        out << items[j].TU << " - same as above\n";
+                        printed[j] = true;
+                    }
+                }
+            }
+        }
+        return violationCount;
+    }
+};
+
+
+Test ExploringOdrViolationReportingTests[] =
+{
+    {"Try reporting enum ODR violations", []
+        {
+            std::string code1 = R"(namespace Hi { enum class Color : int { Red, Green, Blue}; })";
+            std::string code2 = R"(namespace Hi { enum       Color       { Red, Green, Blue}; })";
+            std::string code3 = R"(namespace Hi { enum       Color : int { Red, Green, Blue}; })";
+
+            OdrCop2::AllMaps maps;
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++-cpp-output" }, "tu1.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++-cpp-output" }, "tu2.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code3, { "-x", "c++-cpp-output" }, "tu3.cpp"));
+
+            Assert::AreEqual(1, maps.enumMap.size(), "should be only one enum name");
+
+            const auto& vec = maps.enumMap.begin()->second;
+            Assert::AreNotEqual(vec[0].fullyQualified, vec[1].fullyQualified, "first and second enums are different");
+            Assert::AreNotEqual(vec[0].fullyQualified, vec[2].fullyQualified, "first and third enums are different");
+            Assert::AreNotEqual(vec[1].fullyQualified, vec[2].fullyQualified, "second and third enums are different");
+
+            std::ostringstream oss;
+            int violations = EnumOdrViolationReporter::ReportOdrViolations(maps.enumMap, oss);
+            Assert::AreEqual(1, violations, "should have been one ODR violation");
+            Assert::AreEqual("ODR VIOLATION: Hi::Color\n  [tu1.cpp]\n    enum class Hi::Color : int { Red=0, Green=1, Blue=2 };\n  [tu2.cpp]\n    enum Hi::Color { Red=0, Green=1, Blue=2 };\n  [tu3.cpp]\n    enum Hi::Color : int { Red=0, Green=1, Blue=2 };\n", oss.str());
+        }
+    },
+};

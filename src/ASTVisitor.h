@@ -27,12 +27,13 @@ namespace OdrCop2
     struct EnumInfo
     {
         const std::string TU;
-        const std::string fullyQualified;
+        const std::string fullyQualified; // eg: enum class Color : uint8_t { Red=1, Green=2, Blue=3, };
+        bool operator==(const EnumInfo& other) const { return fullyQualified == other.fullyQualified; }
     };
     struct TypedefInfo
     {
         const std::string TU;
-        const std::string fullyQualified; // enum class Color : uint8_t { Red=1, Green=2, Blue=3, };
+        const std::string fullyQualified; // eg: INT=int
         // key should be: nested namespaces,nested struct/class,name
     };
     struct AllMaps
