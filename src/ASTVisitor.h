@@ -77,49 +77,8 @@ namespace OdrCop2
 
             if (funcDecl->isThisDeclarationADefinition())
             {
-                auto mangledName = getMSVCMangledName(funcDecl, *context);
-
-                std::string fqn;
-                char buf[1024*16] = {'\0'};
-                DWORD result = UnDecorateSymbolName(mangledName.c_str(), buf, static_cast<DWORD>(sizeof(buf)), UNDNAME_COMPLETE);
-                if (result)
-                    fqn = std::string(buf);
-                else
-                    fqn = mangledName;
-
-                const FunctionTemplateDecl* funcTmpltDecl = funcDecl->getDescribedFunctionTemplate();
-                if (funcTmpltDecl != nullptr && !funcDecl->getTemplateSpecializationInfo())
-                {   // only uninstantiated templates go through this path
-                    std::string out;
-                    llvm::raw_string_ostream oStream(out);
-                    funcTmpltDecl->print(oStream, printPolicy);
-                    fqn = out;
-                }
-
-                bool isInlined = funcDecl->isInlined();
-                if  (isInlined)
-                {
-                    struct Insert
-                    {
-                        static std::string Inline(const std::string& sig)
-                        {
-                            static const std::string accessSpecs[] =
-                            {
-                                "public: ",
-                                "protected: ",
-                                "private: ",
-                            };
-                            for (const auto& prefix : accessSpecs)
-                                if (sig.starts_with(prefix))
-                                    return std::string(prefix) + "inline " + sig.substr(prefix.size());
-
-                            return "inline " + sig;
-                        }
-                    };
-                    fqn = Insert::Inline(fqn);
-                }
-
-                maps.functionMap[mangledName].push_back({TU, getMSVCMangledName(funcDecl, *context), fqn, isInlined});
+                auto mangledName = getMSVCMangledName(funcDecl);
+                maps.functionMap[mangledName].push_back({TU, mangledName, constructFQN(funcDecl), funcDecl->isInlined()});
             }
             return true;
         }
@@ -162,9 +121,259 @@ namespace OdrCop2
         }
 
     private:
-        std::string getMSVCMangledName(const clang::FunctionDecl* funcDecl, clang::ASTContext& Ctx)
+        std::string constructFQN(const clang::FunctionDecl* funcDecl)
         {
-            std::unique_ptr<clang::MangleContext> mangleContext(Ctx.createMangleContext());
+            std::string fqn;
+
+            // access specifier
+            AccessSpecifier access = funcDecl->getAccess();
+            switch (access)
+            {
+            case AS_public:    fqn +=    "public: "; break;
+            case AS_protected: fqn += "protected: "; break;
+            case AS_private:   fqn +=   "private: "; break;
+            default:                                 break;
+            }
+
+            // if it's a template, that comes first
+            if (const FunctionTemplateDecl* ftd = funcDecl->getDescribedFunctionTemplate())
+            {
+                std::string              templatePrefix;
+                llvm::raw_string_ostream os(templatePrefix);
+                ftd->getTemplateParameters()->print(os, *context, printPolicy);
+                os.flush();
+                fqn += templatePrefix;
+            }
+
+            // any attributes
+            SourceLocation nameEnd = funcDecl->getNameInfo().getEndLoc();
+            for (const Attr* attr : funcDecl->attrs())
+            {
+                SourceLocation attrLoc = attr->getLocation();
+                if (attrLoc > nameEnd)
+                    continue; // this is a trailing attribute: int f() [[attr]];
+
+                std::string out;
+                llvm::raw_string_ostream os(out);
+                attr->printPretty(os, printPolicy);
+                os.flush();
+                fqn += out + ' ';
+            }
+
+            // friend keyword
+            if (funcDecl->getFriendObjectKind() != Decl::FOK_None)
+                fqn += "friend ";
+
+            // storage class
+            if (funcDecl->isStatic())
+                fqn += "static ";
+            if (funcDecl->getStorageClass() == SC_Extern)
+                fqn += "extern ";
+
+            // function specifiers: virtual/explicit/inline
+            if (funcDecl->isVirtualAsWritten())
+                fqn += "virtual ";
+            if (const auto* ctor = dyn_cast<CXXConstructorDecl>(funcDecl)) {
+                if (ctor->isExplicit())
+                    fqn += "explicit ";
+            } else if (const auto* conv = dyn_cast<CXXConversionDecl>(funcDecl)) {
+                if (conv->isExplicit())
+                    fqn += "explicit ";
+            }
+            if (funcDecl->isInlineSpecified())
+                fqn += "inline ";
+
+            // other specifiers: constexpr, consteval
+            if (funcDecl->isConstexpr())
+                fqn += "constexpr ";
+            if (funcDecl->isConsteval())
+                fqn += "consteval ";
+
+            // return type
+         // fqn += funcDecl->getReturnType().getCanonicalType().getAsString(printPolicy) + " ";
+            if (funcDecl->getDescribedFunctionTemplate() != nullptr)
+                fqn += funcDecl->getReturnType().getAsString(printPolicy) + " ";
+            else
+                fqn += funcDecl->getReturnType().getCanonicalType().getAsString(printPolicy) + " ";
+
+            // calling convention
+            switch (funcDecl->getType()->castAs<FunctionType>()->getCallConv())
+            {
+            case CC_C: if (!(funcDecl->isExternC() || funcDecl->isMSVCRTEntryPoint()))
+                                   fqn += "__cdecl ";       break;
+            case CC_X86StdCall:    fqn += "__stdcall ";     break;
+            case CC_X86FastCall:   fqn += "__fastcall ";    break;
+            case CC_X86ThisCall:   fqn += "__thiscall ";    break;
+            case CC_X86VectorCall: fqn += "__vectorcall ";  break;
+            case CC_Win64:         fqn += "__ms_abi ";      break;
+            default:                                        break;
+            }
+
+            // function name
+            {
+                std::string out;
+                llvm::raw_string_ostream os(out);
+                if (const FunctionTemplateDecl* ftd = funcDecl->getDescribedFunctionTemplate())
+                    ftd->getTemplatedDecl()->printQualifiedName(os, printPolicy);
+                else
+                    funcDecl->printQualifiedName(os, printPolicy);
+                os.flush();
+
+                if (const auto* args = funcDecl->getTemplateSpecializationArgs())
+                {
+                    llvm::raw_string_ostream  os2(out);
+                    out += "<";
+                    bool first = true;
+                    for (const TemplateArgument& arg : args->asArray())
+                    {
+                        if (!first)
+                            out += ", ";
+                        arg.print(printPolicy, os2, true);
+                        os2.flush();
+                        first = false;
+                    }
+                    out += ">";
+                }
+
+                fqn += out;
+            }
+
+            // args
+            fqn += '(';
+            for (const ParmVarDecl* param : funcDecl->parameters())
+            {
+                QualType    type     = param->getType();
+                std::string typeName = type.getAsString(printPolicy);
+             // std::string name     = param->getNameAsString();   // empty if unnamed
+
+                fqn += typeName; // +" " + name;
+
+                // Default argument, if any
+                if (param->hasDefaultArg())
+                {
+                    std::string out;
+                    llvm::raw_string_ostream os(out);
+                    param->getDefaultArg()->printPretty(os, nullptr, printPolicy);
+                    os.flush();
+                    fqn += " = " + out;
+                }
+                fqn += ", ";
+            }
+            if (fqn.substr(fqn.size()-2) == ", ")   // if there are args
+                fqn = fqn.substr(0, fqn.size()-2);  // strip off last ", "
+            fqn += ") ";
+
+            // cv
+            if (const auto* method = dyn_cast<CXXMethodDecl>(funcDecl))
+            {
+                if (method->isConst())
+                    fqn += "const ";
+                if (method->isVolatile())
+                    fqn += "volatile ";
+            }
+            // & and &&
+            if (const auto* method = dyn_cast<CXXMethodDecl>(funcDecl))
+            {
+                switch (method->getRefQualifier())
+                {
+                default:
+                case RQ_None  :               break;
+                case RQ_LValue: fqn += "& ";  break;
+                case RQ_RValue: fqn += "&& "; break;
+                }
+            }
+            // __ptr64
+            //if (isa<CXXMethodDecl>(funcDecl) && !cast<CXXMethodDecl>(funcDecl)->isStatic())
+            //    fqn += "__ptr64 ";
+
+            // noexcept/throw()
+            {
+                const auto* proto = funcDecl->getType()->getAs<FunctionProtoType>();
+                if (proto != nullptr)
+                {
+                    switch (proto->getExceptionSpecType())
+                    {
+                    default:
+                    case EST_None:                fqn += "";                 break;
+                    case EST_NoexceptTrue:        fqn += "noexcept(true) ";  break;
+                    case EST_NoexceptFalse:       fqn += "noexcept(false) "; break;
+                    case EST_DynamicNone:         fqn += "throw() ";         break;
+                    case EST_MSAny:               fqn += "throw(...) ";      break;
+
+                    case EST_BasicNoexcept:
+                        if (funcDecl->getExceptionSpecSourceRange().isValid()) // only if the user actually wrote this (i.e., not "inferred" by the compiler)
+                            fqn += "noexcept ";
+                        break;
+
+                    case EST_DependentNoexcept:
+                    {
+                        std::string              exprStr;
+                        llvm::raw_string_ostream os(exprStr);
+                        proto->getNoexceptExpr()->printPretty(os, nullptr, printPolicy);
+                        os.flush();
+                        fqn += "noexcept(" + exprStr + ") ";
+                        break;
+                    }
+                    case EST_Dynamic:
+                    {
+                        std::string result = "throw(";
+                        bool        first = true;
+                        for (QualType t : proto->exceptions())
+                        {
+                            if (!first)
+                                result += ", ";
+                            result += t.getAsString(printPolicy);
+                            first = false;
+                        }
+                        result += ") ";
+                        fqn += result;
+                    }
+                    }
+                }
+            }
+
+            // trailing attributes
+            for (const Attr* attr : funcDecl->attrs())
+            {
+                SourceLocation attrLoc = attr->getLocation();
+                if (attrLoc < nameEnd)
+                    continue; // this is a leading attribute: [[attr]] int f();
+
+                std::string out;
+                llvm::raw_string_ostream os(out);
+                attr->printPretty(os, printPolicy);
+                os.flush();
+                fqn += out + ' ';
+            }
+
+            // override / final
+            if (const auto* method = dyn_cast<CXXMethodDecl>(funcDecl))
+            {
+                if (method->hasAttr<OverrideAttr>())
+                    fqn += "override ";
+                if (method->hasAttr<FinalAttr>())
+                    fqn += "final ";
+            }
+
+            // = 0
+            if (const auto* method = dyn_cast<CXXMethodDecl>(funcDecl))
+            {
+                if (method->isPureVirtual())
+                    fqn += "=0 ";
+            }
+            // = default
+            if (funcDecl->isDefaulted())
+                fqn += "=default ";
+            // = delete
+            if (funcDecl->isDeleted())
+                fqn += "= delete ";
+
+            // strip off the last " "
+            return fqn.substr(0, fqn.size()-1);
+        }
+        std::string getMSVCMangledName(const clang::FunctionDecl* funcDecl)
+        {
+            std::unique_ptr<clang::MangleContext> mangleContext(context->createMangleContext());
 
             if (!mangleContext->shouldMangleDeclName(funcDecl))
             {   // C APIs (like DllMain and main) trigger this path.
