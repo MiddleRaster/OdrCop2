@@ -212,7 +212,7 @@ struct OdrViolationReporter
     static int ReportTypedefOdrViolations(const std::map<std::string, std::vector<OdrCop2::TypedefInfo>>& map, auto&& out)
     {
         /*
-        ODR VIOLATION: typedef/using Hi::INT
+        ODR VIOLATION: typedef/alias Hi::INT
           [tu1.cpp]
             Hi::INT = int
           [tu2.cpp]
@@ -239,7 +239,7 @@ struct OdrViolationReporter
             //}
 
             ++violationCount;
-            out << "ODR VIOLATION: typedef/using " << name << '\n';
+            out << "ODR VIOLATION: typedef/alias " << name << '\n';
 
             std::vector<bool> printed(items.size(), false);
             for (size_t i=0; i<items.size(); ++i)
