@@ -23,6 +23,19 @@ namespace OdrCop2
         const std::string TU;
         const std::string mangled;
         const std::string fullyQualified;
+        const bool isInline;
+        // TODO:
+        const bool isContexpr;
+        const bool isConsteval;
+        const bool isNoexcept;
+        const bool isThrow;
+        const bool isExternC; // ⁠extern "C"⁠ vs C++ Linkage // I don’t see how this one can work, as the extern “C” one doesn’t get mangled
+        const std::vector<std::string> defaultArgValues;
+        const std::vector<std::string> defaultTemplateArgTypes;
+        bool operator==(const FunctionInfo& other) const
+        {   // I prepended "inline", but if the others cannot be pre/appended, check for them here
+            return fullyQualified == other.fullyQualified;
+        }
     };
     struct EnumInfo
     {
@@ -83,7 +96,30 @@ namespace OdrCop2
                     fqn = out;
                 }
 
-                maps.functionMap[mangledName].push_back({TU, getMSVCMangledName(funcDecl, *context), fqn});
+                bool isInlined = funcDecl->isInlined();
+                if  (isInlined)
+                {
+                    struct Insert
+                    {
+                        static std::string Inline(const std::string& sig)
+                        {
+                            static const std::string accessSpecs[] =
+                            {
+                                "public: ",
+                                "protected: ",
+                                "private: ",
+                            };
+                            for (const auto& prefix : accessSpecs)
+                                if (sig.starts_with(prefix))
+                                    return std::string(prefix) + "inline " + sig.substr(prefix.size());
+
+                            return "inline " + sig;
+                        }
+                    };
+                    fqn = Insert::Inline(fqn);
+                }
+
+                maps.functionMap[mangledName].push_back({TU, getMSVCMangledName(funcDecl, *context), fqn, isInlined});
             }
             return true;
         }

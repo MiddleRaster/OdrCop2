@@ -263,6 +263,61 @@ struct OdrViolationReporter
         }
         return violationCount;
     }
+    static int ReportFunctionOdrViolations(const std::map<std::string, std::vector<OdrCop2::FunctionInfo>>& map, auto&& out)
+    {
+        /*
+        ODR VIOLATION: ?foo@@YAXXZ
+          [tu1.cpp]
+            inline void __cdecl foo(void);
+          [tu2.cpp]
+            void __cdecl foo(void);
+          [tu3.cpp] - same as above
+        */
+        int violationCount = 0;
+        for (auto& [name, items] : map)
+        {
+            if (items.size() < 2)
+                continue;
+
+            //if (true == skipAnonymous(items[0]))
+            //    continue;
+
+            if (std::all_of(items.begin() + 1, items.end(), [&](const auto& x) { return x == items[0]; }))
+                continue;
+
+            // find mismatch index
+            //int mismatch = -1;
+            //for (size_t m = 1; m < items.size(); ++m)
+            //{
+            //    if (-1 != (mismatch = getMismatchIndex(items[0], items[m])))
+            //        break;
+            //}
+
+            ++violationCount;
+            out << "ODR VIOLATION: " << name << '\n';
+
+            std::vector<bool> printed(items.size(), false);
+            for (size_t i=0; i<items.size(); ++i)
+            {
+                if (printed[i])
+                    continue;
+
+                out << "  ["  << items[i].TU << "]\n";
+                out << "    " << items[i].fullyQualified << '\n';
+                printed[i] = true;
+
+                for (size_t j=i+1; j<items.size(); ++j)
+                {
+                    if (!printed[j] && (items[i] == items[j]))
+                    {
+                        out << "  [" << items[j].TU << "] - same as above\n";
+                        printed[j] = true;
+                    }
+                }
+            }
+        }
+        return 1;
+    }
 };
 
 Test ExploringOdrViolationReportingTests[] =
@@ -311,6 +366,28 @@ Test ExploringOdrViolationReportingTests[] =
             int violations = OdrViolationReporter::ReportTypedefOdrViolations(maps.typedefMap, oss);
             Assert::AreEqual(1, violations, "should have been one ODR violation");
             Assert::AreEqual("ODR VIOLATION: typedef/using Hi::INT\n  [tu1.cpp]\n    Hi::INT = int\n  [tu2.cpp]\n    Hi::INT = unsigned int\n  [tu3.cpp] - same as above\n", oss.str());
+        }
+    },
+    {"Report function ODR violations", []
+        {
+            std::string code1 = "inline void foo(){}";
+            std::string code2 =        "void foo(){}";
+
+            OdrCop2::AllMaps maps;
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++-cpp-output" }, "tu1.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++-cpp-output" }, "tu2.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++-cpp-output" }, "tu3.cpp"));
+
+            Assert::AreEqual(1, maps.functionMap.size(), "should be only one function name");
+
+            const auto& vec = maps.functionMap.begin()->second;
+            Assert::AreNotEqual(vec[0].fullyQualified, vec[1].fullyQualified, "first and second functions are different");
+            Assert::AreEqual   (vec[1].fullyQualified, vec[2].fullyQualified, "first and second functions are the same");
+
+            std::ostringstream oss;
+            int violations = OdrViolationReporter::ReportFunctionOdrViolations(maps.functionMap, oss);
+            Assert::AreEqual(1, violations, "should have been one ODR violation");
+            Assert::AreEqual("ODR VIOLATION: ?foo@@YAXXZ\n  [tu1.cpp]\n    inline void __cdecl foo(void)\n  [tu2.cpp]\n    void __cdecl foo(void)\n  [tu3.cpp] - same as above\n", oss.str());
         }
     },
 };
