@@ -34,7 +34,7 @@ namespace OdrCop2
     {
         const std::string TU;
         const std::string fullyQualified; // eg: INT=int
-        // key should be: nested namespaces,nested struct/class,name
+        bool operator==(const TypedefInfo& other) const { return fullyQualified == other.fullyQualified; }
     };
     struct AllMaps
     {
