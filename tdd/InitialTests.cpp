@@ -365,7 +365,7 @@ Test ExploringOdrViolationReportingTests[] =
             std::ostringstream oss;
             int violations = OdrViolationReporter::ReportTypedefOdrViolations(maps.typedefMap, oss);
             Assert::AreEqual(1, violations, "should have been one ODR violation");
-            Assert::AreEqual("ODR VIOLATION: typedef/using Hi::INT\n  [tu1.cpp]\n    Hi::INT = int\n  [tu2.cpp]\n    Hi::INT = unsigned int\n  [tu3.cpp] - same as above\n", oss.str());
+            Assert::AreEqual("ODR VIOLATION: typedef/alias Hi::INT\n  [tu1.cpp]\n    Hi::INT = int\n  [tu2.cpp]\n    Hi::INT = unsigned int\n  [tu3.cpp] - same as above\n", oss.str());
         }
     },
     {"Report function ODR violations", []
