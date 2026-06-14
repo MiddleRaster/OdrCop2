@@ -420,7 +420,14 @@ namespace OdrCop2
             // data members
             for (const FieldDecl* field : recordDecl->fields())
             {
-                out += "    ";
+                switch (field->getAccess())
+                {
+                case AS_public:    out += "public:    "; break;
+                case AS_protected: out += "protected: "; break;
+                case AS_private:   out += "private:   "; break;
+                default:           out += "           "; break;
+                }
+
                 out += field->getType().getCanonicalType().getAsString(printPolicy) + " ";
                 out += field->getNameAsString();
 
@@ -442,7 +449,6 @@ namespace OdrCop2
                 if (method->isImplicit())
                     continue;
 
-                out += "    ";
                 out += ConstructFunctionSignature(method, false);
                 out += ";\n";
             }
