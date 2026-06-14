@@ -23,19 +23,7 @@ namespace OdrCop2
         const std::string TU;
         const std::string mangled;
         const std::string fullyQualified;
-        const bool isInline;
-        // TODO:
-        const bool isContexpr;
-        const bool isConsteval;
-        const bool isNoexcept;
-        const bool isThrow;
-        const bool isExternC; // ⁠extern "C"⁠ vs C++ Linkage // I don’t see how this one can work, as the extern “C” one doesn’t get mangled
-        const std::vector<std::string> defaultArgValues;
-        const std::vector<std::string> defaultTemplateArgTypes;
-        bool operator==(const FunctionInfo& other) const
-        {   // I prepended "inline", but if the others cannot be pre/appended, check for them here
-            return fullyQualified == other.fullyQualified;
-        }
+        bool operator==(const FunctionInfo& other) const { return fullyQualified == other.fullyQualified; }
     };
     struct EnumInfo
     {
@@ -49,12 +37,18 @@ namespace OdrCop2
         const std::string fullyQualified; // eg: INT=int
         bool operator==(const TypedefInfo& other) const { return fullyQualified == other.fullyQualified; }
     };
+    struct UdtInfo
+    {
+        const std::string TU;
+        const std::string fullyQualified;
+        bool operator==(const UdtInfo& other) const { return fullyQualified == other.fullyQualified; }
+    };
     struct AllMaps
     {
-        std::map<std::string,std::vector<FunctionInfo>> functionMap;
+        std::map<std::string,std::vector<     UdtInfo>>      udtMap;
         std::map<std::string,std::vector<    EnumInfo>>     enumMap;
         std::map<std::string,std::vector< TypedefInfo>>  typedefMap;
-        // udt
+        std::map<std::string,std::vector<FunctionInfo>> functionMap;
     };
 
     class TheVisitor : public RecursiveASTVisitor<TheVisitor>
@@ -78,7 +72,18 @@ namespace OdrCop2
             if (funcDecl->isThisDeclarationADefinition())
             {
                 auto mangledName = getMSVCMangledName(funcDecl);
-                maps.functionMap[mangledName].push_back({TU, mangledName, constructFQN(funcDecl), funcDecl->isInlined()});
+                maps.functionMap[mangledName].push_back({TU, mangledName, ConstructFunctionSignature(funcDecl)});
+            }
+            return true;
+        }
+        bool VisitCXXRecordDecl(CXXRecordDecl* recordDecl)
+        {
+            if (context->getSourceManager().isInSystemHeader(recordDecl->getLocation()))
+                return true; // skip anything not in the main file or a user header
+
+            if (recordDecl->isThisDeclarationADefinition())
+            {
+                maps.udtMap[recordDecl->getQualifiedNameAsString()].push_back({TU, ConstructRecordSignature(recordDecl)});
             }
             return true;
         }
@@ -121,7 +126,7 @@ namespace OdrCop2
         }
 
     private:
-        std::string constructFQN(const clang::FunctionDecl* funcDecl)
+        std::string ConstructFunctionSignature(const clang::FunctionDecl* funcDecl, bool wantFullyQualifiedMethodName=true)
         {
             std::string fqn;
 
@@ -214,9 +219,19 @@ namespace OdrCop2
                 std::string out;
                 llvm::raw_string_ostream os(out);
                 if (const FunctionTemplateDecl* ftd = funcDecl->getDescribedFunctionTemplate())
-                    ftd->getTemplatedDecl()->printQualifiedName(os, printPolicy);
+                {
+                    if (wantFullyQualifiedMethodName)
+                        ftd->getTemplatedDecl()->printQualifiedName(os, printPolicy);
+                    else
+                        ftd->getTemplatedDecl()->getNameAsString();
+                }
                 else
-                    funcDecl->printQualifiedName(os, printPolicy);
+                {
+                    if (wantFullyQualifiedMethodName)
+                        funcDecl->printQualifiedName(os, printPolicy);
+                    else
+                        out = funcDecl->getNameAsString();
+                }
                 os.flush();
 
                 if (const auto* args = funcDecl->getTemplateSpecializationArgs())
@@ -392,6 +407,50 @@ namespace OdrCop2
                 mangleContext->mangleCXXName(funcDecl, oStream);                             // Ordinary C++ functions
             return out;
         }
+
+        std::string ConstructRecordSignature(CXXRecordDecl* recordDecl)
+        {
+            std::string out;
+
+            // struct/class/union keyword + name
+            out += recordDecl->getKindName().str() + " ";
+            out += recordDecl->getQualifiedNameAsString();
+            out += " {\n";
+
+            // data members
+            for (const FieldDecl* field : recordDecl->fields())
+            {
+                out += "    ";
+                out += field->getType().getCanonicalType().getAsString(printPolicy) + " ";
+                out += field->getNameAsString();
+
+                // bitfield
+                if (field->isBitField())
+                {
+                    std::string bitWidth;
+                    llvm::raw_string_ostream os(bitWidth);
+                    field->getBitWidth()->printPretty(os, nullptr, printPolicy);
+                    os.flush();
+                    out += " : " + bitWidth;
+                }
+                out += ";\n";
+            }
+
+            // methods
+            for (const CXXMethodDecl* method : recordDecl->methods())
+            {
+                if (method->isImplicit())
+                    continue;
+
+                out += "    ";
+                out += ConstructFunctionSignature(method, false);
+                out += ";\n";
+            }
+
+            out += "}";
+            return out;
+        }
+
     };
 
     class VisitorConsumer : public ASTConsumer

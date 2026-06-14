@@ -36,10 +36,13 @@
     <ClCompile Include="FunctionTests.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="TypedefTests.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="EnumTests.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="TypedefTests.cpp">
+    <ClCompile Include="UdtTests.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

@@ -27,12 +27,10 @@ int wmain(int argc, wchar_t** argv)
     OdrCop2::VisitorActionFactory factory(maps);
     tool.run(&factory);
 
-    std::wcout << L"functions found:\n";
-    for (const auto& [key, vec] : maps.functionMap)
-    {
-        for(auto& fi : vec)
-            std::cout << fi.TU << ": " << fi.fullyQualified << '\n';
-    }
+    std::wcout << L"functions found:\n";          for (const auto& [key, vec] : maps.functionMap) for (auto& fi : vec) std::cout << fi.TU << ": " << fi.fullyQualified << '\n';
+    std::wcout << L"typedef/aliases found:\n";    for (const auto& [key, vec] : maps.typedefMap ) for (auto& fi : vec) std::cout << fi.TU << ": " << fi.fullyQualified << '\n';
+    std::wcout << L"enums found:\n";              for (const auto& [key, vec] : maps.enumMap    ) for (auto& fi : vec) std::cout << fi.TU << ": " << fi.fullyQualified << '\n';
+    std::wcout << L"user-defined types found:\n"; for (const auto& [key, vec] : maps.udtMap     ) for (auto& fi : vec) std::cout << fi.TU << ": " << fi.fullyQualified << '\n';
 
     return 0;
 }
