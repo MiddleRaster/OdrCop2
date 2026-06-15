@@ -5,6 +5,7 @@ import tdd20;
 using namespace TDD20;
 
 #include "..\src\ASTVisitor.h"
+#include "headers\Utils.h"
 
 Test UdtTests[] =
 {
@@ -52,6 +53,25 @@ Test UdtTests[] =
                              "private:   const int privateInt=0;\n"
                              "public:    int __cdecl Public() const;\n"
                              "public:    const int publicInt{-1};\n"
+                             "}", vec[0].fullyQualified, "should have gotten the entire struct but not the function body");
+        }
+    },
+    {"class with a bitfield with an initializer", []
+        {
+            StderrSuppressor suppressor;
+
+            std::string code =  "class Class {"
+                                "public:"
+                                "    int x : 4 = 3;"  // legal in C++20
+                                "};";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            Assert::IsTrue(ok);
+            Assert::AreEqual(1, maps.udtMap.size());
+            const auto& vec = maps.udtMap.begin()->second;
+            Assert::AreEqual("class Class {\n"
+                             "public:    int x : 4=3;\n"
                              "}", vec[0].fullyQualified, "should have gotten the entire struct but not the function body");
         }
     },

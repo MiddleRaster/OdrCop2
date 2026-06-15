@@ -7,6 +7,8 @@ using namespace TDD20;
 #include "..\src\ASTVisitor.h"
 #include <DbgHelp.h>
 
+#include "headers\Utils.h"
+
 Test FunctionTests[] =
 {
 	{"Given code containing a function named Foo, can find Foo in the AST", []
@@ -48,30 +50,7 @@ namespace MyNamespace
     },
     {"I wonder what happens if there's a compiler error", []
         {
-            class StderrSuppressor
-            {
-                int saved, devNull;
-            public:
-                StderrSuppressor()
-                {
-                    saved   = _dup(2);
-                    devNull = -1;
-                    _sopen_s(&devNull, "nul", _O_WRONLY, _SH_DENYNO, _S_IWRITE);
-                    if (saved != -1 && devNull != -1)
-                        _dup2(devNull, 2);
-                }
-               ~StderrSuppressor()
-                {
-                    if (saved != -1)
-                    {
-                        _dup2(saved, 2);
-                        _close(saved);
-                    }
-                    if (devNull != -1)
-                        _close(devNull);
-                }
-            } suppress;
-
+            StderrSuppressor suppress;
             std::string code = R"(void foo() { return 42; })";
             OdrCop2::AllMaps maps;
             bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });

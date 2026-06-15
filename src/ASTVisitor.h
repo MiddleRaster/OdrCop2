@@ -432,16 +432,6 @@ namespace OdrCop2
 
                     out += field->getType().getCanonicalType().getAsString(printPolicy) + " ";
                     out += field->getNameAsString();
-                    if (field->hasInClassInitializer())
-                    {
-                        const Expr*     expr = field->getInClassInitializer();
-                        llvm::StringRef text = clang::Lexer::getSourceText(CharSourceRange::getTokenRange(expr->getSourceRange()), context->getSourceManager(), context->getLangOpts());
-                        std::string     init = text.str();
-                        if ((init.starts_with("{")) || init.starts_with("("))
-                            out +=       init;
-                        else
-                            out += "=" + init;
-                    }
 
                     if (field->isBitField())
                     {
@@ -451,6 +441,18 @@ namespace OdrCop2
                         os.flush();
                         out += " : " + bitWidth;
                     }
+
+                    if (field->hasInClassInitializer())
+                    {
+                        const Expr*      expr = field->getInClassInitializer();
+                        llvm::StringRef  text = clang::Lexer::getSourceText(CharSourceRange::getTokenRange(expr->getSourceRange()), context->getSourceManager(), context->getLangOpts());
+                        std::string      init = text.str();
+                        if ((init.starts_with("{")) || init.starts_with("("))
+                            out +=       init;
+                        else
+                            out += "=" + init;
+                    }
+
                     out += ";\n";
                 }
                 else if (const auto* method = clang::dyn_cast<clang::CXXMethodDecl>(decl))

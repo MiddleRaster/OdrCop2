@@ -175,6 +175,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="headers\stdafx.h" />
+    <ClInclude Include="headers\Utils.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\src\OdrCop2.vcxproj">
