@@ -134,9 +134,9 @@ namespace OdrCop2
             AccessSpecifier access = funcDecl->getAccess();
             switch (access)
             {
-            case AS_public:    fqn +=    "public: "; break;
+            case AS_public:    fqn += "public:    "; break;
             case AS_protected: fqn += "protected: "; break;
-            case AS_private:   fqn +=   "private: "; break;
+            case AS_private:   fqn += "private:   "; break;
             default:                                 break;
             }
 
@@ -430,8 +430,17 @@ namespace OdrCop2
 
                 out += field->getType().getCanonicalType().getAsString(printPolicy) + " ";
                 out += field->getNameAsString();
+                if (field->hasInClassInitializer())
+                {
+                    const Expr*     expr = field->getInClassInitializer();
+                    llvm::StringRef text = clang::Lexer::getSourceText(CharSourceRange::getTokenRange(expr->getSourceRange()), context->getSourceManager(), context->getLangOpts());
+                    std::string     init = text.str();
+                    if ((init.starts_with("{")) || init.starts_with("("))
+                        out +=       init;
+                    else
+                        out += "=" + init;
+                }
 
-                // bitfield
                 if (field->isBitField())
                 {
                     std::string bitWidth;

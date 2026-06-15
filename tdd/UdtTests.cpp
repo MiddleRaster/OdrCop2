@@ -29,7 +29,7 @@ Test UdtTests[] =
             Assert::IsTrue(ok);
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
-            Assert::AreEqual("struct S {\npublic:    int x;\npublic: int __cdecl foo();\n}", vec[0].fullyQualified, "should have gotten the entire struct but not the function body");
+            Assert::AreEqual("struct S {\npublic:    int x;\npublic:    int __cdecl foo();\n}", vec[0].fullyQualified, "should have gotten the entire struct but not the function body");
         }
     },
     {"class with one private method and one private data-member and one public method and one public data-member", []
@@ -39,7 +39,7 @@ Test UdtTests[] =
                                 "    const int privateInt = 0;"
                                 "public:"
                                 "    int Public() const { return privateInt; }"
-                                "    const int publicInt = -1;"
+                                "    const int publicInt{-1};"
                                 "};";
 
             OdrCop2::AllMaps maps;
@@ -48,10 +48,10 @@ Test UdtTests[] =
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
             Assert::AreEqual("class Class {\n"
-                             "private:   const int privateInt;\n"
-                             "public:    const int publicInt;\n"
-                             "private: void __cdecl Private();\n"
-                             "public: int __cdecl Public() const;\n"
+                             "private:   const int privateInt=0;\n"
+                             "public:    const int publicInt{-1};\n"
+                             "private:   void __cdecl Private();\n"
+                             "public:    int __cdecl Public() const;\n"
                              "}", vec[0].fullyQualified, "should have gotten the entire struct but not the function body");
         }
     },
