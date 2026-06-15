@@ -14,7 +14,7 @@ Test ExploratoryTestsOfClangAST[] =
             std::string code = R"(void foo() {})";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             Assert::IsTrue(ok);
             const auto& vec = maps.functionMap.begin()->second;
             Assert::AreEqual("input.cc", vec[0].TU, "should have gotten the TU name");
@@ -31,7 +31,7 @@ namespace SomeNamespace
 }
 )";
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             Assert::IsTrue(ok);
             Assert::AreEqual(2, maps.functionMap.size(), "should have found 2 functions");
 
@@ -55,7 +55,7 @@ namespace { struct Helper { int x; }; }
 void process(Helper h) { (void)h; }
 )";
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             Assert::IsTrue(ok);
             const auto& vec = maps.functionMap.begin()->second;
             Assert::AreEqual(1, vec.size(), "should have found 1 function");
@@ -87,7 +87,7 @@ struct Outer                            // anonymous struct as a parameter type
 Outer makeOuter() { return Outer{}; }   // Function returning a type containing an anonymous struct
 )";
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             Assert::IsTrue(ok);
             const auto& vec = maps.functionMap.begin()->second;
             Assert::AreEqual(1, vec.size(), "should have found 1 function");
@@ -110,7 +110,7 @@ union Variant
 Variant makeVariant() { return Variant{}; }
 )";
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             Assert::IsTrue(ok);
             const auto& vec = maps.functionMap.begin()->second;
             Assert::AreEqual(1, vec.size(), "should have found 1 function");
@@ -138,7 +138,7 @@ struct Pixel
 };
 )";
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             Assert::IsTrue(ok);
             const auto& vec = maps.functionMap.begin()->second;
             Assert::AreEqual(1, vec.size(), "should have found 1 function");
@@ -329,9 +329,9 @@ Test ExploringOdrViolationReportingTests[] =
             std::string code3 = R"(namespace Hi { enum       Color : int { Red, Green, Blue}; })";
 
             OdrCop2::AllMaps maps;
-            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++-cpp-output" }, "tu1.cpp"));
-            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++-cpp-output" }, "tu2.cpp"));
-            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code3, { "-x", "c++-cpp-output" }, "tu3.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++" }, "tu1.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++" }, "tu2.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code3, { "-x", "c++" }, "tu3.cpp"));
 
             Assert::AreEqual(1, maps.enumMap.size(), "should be only one enum name");
 
@@ -352,9 +352,9 @@ Test ExploringOdrViolationReportingTests[] =
             std::string code2 = R"(namespace Hi { using INT = unsigned int; })";
 
             OdrCop2::AllMaps maps;
-            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++-cpp-output" }, "tu1.cpp"));
-            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++-cpp-output" }, "tu2.cpp"));
-            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++-cpp-output" }, "tu3.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++" }, "tu1.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++" }, "tu2.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++" }, "tu3.cpp"));
 
             Assert::AreEqual(1, maps.typedefMap.size(), "should be only one typedef name");
 
@@ -374,9 +374,9 @@ Test ExploringOdrViolationReportingTests[] =
             std::string code2 =        "void foo(){}";
 
             OdrCop2::AllMaps maps;
-            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++-cpp-output" }, "tu1.cpp"));
-            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++-cpp-output" }, "tu2.cpp"));
-            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++-cpp-output" }, "tu3.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++" }, "tu1.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++" }, "tu2.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++" }, "tu3.cpp"));
 
             Assert::AreEqual(1, maps.functionMap.size(), "should be only one function name");
 

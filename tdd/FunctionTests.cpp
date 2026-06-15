@@ -16,7 +16,7 @@ Test FunctionTests[] =
 			std::string code = R"(int foo() { return 42; })";
 
             OdrCop2::AllMaps maps;
-            clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             const auto& vec = maps.functionMap.begin()->second;
             Assert::AreEqual(L"int __cdecl foo()", vec[0].fullyQualified);
         }
@@ -33,7 +33,7 @@ namespace MyNamespace
     } 
 })";
             OdrCop2::AllMaps maps;
-            clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             const auto& vec = maps.functionMap.begin()->second;
             Assert::AreEqual(L"int __cdecl MyNamespace::foo()", vec[0].fullyQualified, "should have found fully qualified function name");
         }
@@ -43,7 +43,7 @@ namespace MyNamespace
             std::string code = R"( namespace { int foo() { return 42; } } )";
 
             OdrCop2::AllMaps maps;
-            clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             const auto& vec = maps.functionMap.begin()->second;
             Assert::AreEqual(L"int __cdecl (anonymous namespace)::foo()", vec[0].fullyQualified, "should have found fully qualified function name within anonymous namespace");
         }
@@ -53,7 +53,7 @@ namespace MyNamespace
             StderrSuppressor suppress;
             std::string code = R"(void foo() { return 42; })";
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             Assert::IsFalse(ok);
         }
     },
@@ -64,7 +64,7 @@ using IamAtypedef    = int;
 IamAtypedef foo() { return 42; }
 )";
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             Assert::IsTrue(ok);
             const auto& vec = maps.functionMap.begin()->second;
             Assert::AreEqual("int __cdecl foo()", vec[0].fullyQualified, "should have returned fully qualified function name");
@@ -74,7 +74,7 @@ IamAtypedef foo() { return 42; }
         {
             std::string code = "int foo() { return 42; }";
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             Assert::IsTrue(ok);
             const auto& vec = maps.functionMap.begin()->second;
             Assert::AreEqual("?foo@@YAHXZ", vec[0].mangled, "should return the mangled name");
@@ -88,7 +88,7 @@ IamAtypedef foo() { return 42; }
         {
             std::string code = "int foo(char* p, bool b) { (void)p; (void)b; return 42; }";
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             Assert::IsTrue(ok);
             const auto& vec = maps.functionMap.begin()->second;
             Assert::AreEqual("int __cdecl foo(char *, bool)", vec[0].fullyQualified, "should have found function");
@@ -99,7 +99,7 @@ IamAtypedef foo() { return 42; }
             std::string code = "template <typename T> T   foo     (const T  & t) { return t  ; }"
                                "template <          > int foo<int>(const int& i) { return i+1; }";
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             Assert::IsTrue(ok);
             Assert::AreEqual(2, maps.functionMap.size(), "there should be two different typedefs in the map");
 

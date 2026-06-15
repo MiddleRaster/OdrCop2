@@ -14,7 +14,7 @@ Test TypedefTests[] =
 			std::string code = R"(typedef int INT;)";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             Assert::IsTrue(ok);
             const auto& vec = maps.typedefMap.begin()->second;
             Assert::AreEqual(1, vec.size(), "there should be 1 element in vector of TypedefInfo structs");
@@ -26,7 +26,7 @@ Test TypedefTests[] =
 			std::string code = R"(using INT=int;)";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             Assert::IsTrue(ok);
             const auto& vec = maps.typedefMap.begin()->second;
             Assert::AreEqual(1, vec.size(), "there should be 1 element in vector of TypedefInfo structs");
@@ -39,7 +39,7 @@ Test TypedefTests[] =
                                R"(typedef INT ANOTHER_INT;)";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             Assert::IsTrue(ok);
 
             Assert::AreEqual(2, maps.typedefMap.size(), "there should be two different typedefs in the map");

@@ -14,7 +14,7 @@ Test UdtTests[] =
             std::string code = R"(struct S { int x; };)";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             Assert::IsTrue(ok);
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
@@ -26,7 +26,7 @@ Test UdtTests[] =
             std::string code = R"(struct S { int x; int foo(){ return x; } };)";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             Assert::IsTrue(ok);
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
@@ -44,7 +44,7 @@ Test UdtTests[] =
                                 "};";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             Assert::IsTrue(ok);
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
@@ -66,7 +66,7 @@ Test UdtTests[] =
                                 "};";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++-cpp-output" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             Assert::IsTrue(ok);
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
