@@ -48,10 +48,10 @@ Test UdtTests[] =
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
             Assert::AreEqual("class Class {\n"
-                             "private:   const int privateInt=0;\n"
-                             "public:    const int publicInt{-1};\n"
                              "private:   void __cdecl Private();\n"
+                             "private:   const int privateInt=0;\n"
                              "public:    int __cdecl Public() const;\n"
+                             "public:    const int publicInt{-1};\n"
                              "}", vec[0].fullyQualified, "should have gotten the entire struct but not the function body");
         }
     },

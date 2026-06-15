@@ -417,55 +417,55 @@ namespace OdrCop2
             out += recordDecl->getQualifiedNameAsString();
             out += " {\n";
 
-            // data members
-            for (const FieldDecl* field : recordDecl->fields())
+
+            for (const clang::Decl* decl : recordDecl->decls())
             {
-                switch (field->getAccess())
-                {
-                case AS_public:    out += "public:    "; break;
-                case AS_protected: out += "protected: "; break;
-                case AS_private:   out += "private:   "; break;
-                default:           out += "           "; break;
+                if (const auto* field = clang::dyn_cast<clang::FieldDecl>(decl))
+                {   // data members
+                    switch (field->getAccess())
+                    {
+                    case AS_public:    out += "public:    "; break;
+                    case AS_protected: out += "protected: "; break;
+                    case AS_private:   out += "private:   "; break;
+                    default:           out += "           "; break;
+                    }
+
+                    out += field->getType().getCanonicalType().getAsString(printPolicy) + " ";
+                    out += field->getNameAsString();
+                    if (field->hasInClassInitializer())
+                    {
+                        const Expr*     expr = field->getInClassInitializer();
+                        llvm::StringRef text = clang::Lexer::getSourceText(CharSourceRange::getTokenRange(expr->getSourceRange()), context->getSourceManager(), context->getLangOpts());
+                        std::string     init = text.str();
+                        if ((init.starts_with("{")) || init.starts_with("("))
+                            out +=       init;
+                        else
+                            out += "=" + init;
+                    }
+
+                    if (field->isBitField())
+                    {
+                        std::string bitWidth;
+                        llvm::raw_string_ostream os(bitWidth);
+                        field->getBitWidth()->printPretty(os, nullptr, printPolicy);
+                        os.flush();
+                        out += " : " + bitWidth;
+                    }
+                    out += ";\n";
                 }
+                else if (const auto* method = clang::dyn_cast<clang::CXXMethodDecl>(decl))
+                {   // methods
+                    if (method->isImplicit())
+                        continue;
 
-                out += field->getType().getCanonicalType().getAsString(printPolicy) + " ";
-                out += field->getNameAsString();
-                if (field->hasInClassInitializer())
-                {
-                    const Expr*     expr = field->getInClassInitializer();
-                    llvm::StringRef text = clang::Lexer::getSourceText(CharSourceRange::getTokenRange(expr->getSourceRange()), context->getSourceManager(), context->getLangOpts());
-                    std::string     init = text.str();
-                    if ((init.starts_with("{")) || init.starts_with("("))
-                        out +=       init;
-                    else
-                        out += "=" + init;
+                    out += ConstructFunctionSignature(method, false);
+                    out += ";\n";
                 }
-
-                if (field->isBitField())
-                {
-                    std::string bitWidth;
-                    llvm::raw_string_ostream os(bitWidth);
-                    field->getBitWidth()->printPretty(os, nullptr, printPolicy);
-                    os.flush();
-                    out += " : " + bitWidth;
-                }
-                out += ";\n";
-            }
-
-            // methods
-            for (const CXXMethodDecl* method : recordDecl->methods())
-            {
-                if (method->isImplicit())
-                    continue;
-
-                out += ConstructFunctionSignature(method, false);
-                out += ";\n";
             }
 
             out += "}";
             return out;
         }
-
     };
 
     class VisitorConsumer : public ASTConsumer
