@@ -158,11 +158,7 @@ namespace OdrCop2
                 if (attrLoc > nameEnd)
                     continue; // this is a trailing attribute: int f() [[attr]];
 
-                std::string out;
-                llvm::raw_string_ostream os(out);
-                attr->printPretty(os, printPolicy);
-                os.flush();
-                fqn += out + ' ';
+                fqn += ConstructAttribute(attr);
             }
 
             // friend keyword
@@ -353,11 +349,7 @@ namespace OdrCop2
                 if (attrLoc < nameEnd)
                     continue; // this is a leading attribute: [[attr]] int f();
 
-                std::string out;
-                llvm::raw_string_ostream os(out);
-                attr->printPretty(os, printPolicy);
-                os.flush();
-                fqn += out + ' ';
+                fqn += ConstructAttribute(attr);
             }
 
             // override / final
@@ -411,6 +403,7 @@ namespace OdrCop2
         {
             std::string out;
 
+            // template
             const clang::ClassTemplateDecl* ctd = recordDecl->getDescribedClassTemplate();
             if (ctd)
             {
@@ -467,52 +460,7 @@ namespace OdrCop2
             out += recordDecl->getKindName().str() + " ";
 
             // alignas/[[attributes]]/__declspecs
-            for(const auto* attr : recordDecl->attrs())
-            {
-                if (const auto* alignedAttr = clang::dyn_cast<clang::AlignedAttr>(attr))
-                {
-                    if (alignedAttr->isAlignmentExpr())
-                    {
-                        const clang::Expr* expr = alignedAttr->getAlignmentExpr();
-                        if (expr && expr->isIntegerConstantExpr(*context))
-                        {
-                            auto optInt = expr->getIntegerConstantExpr(*context);
-                            if (optInt.has_value())
-                            {
-                                out += "alignas(" + std::to_string(optInt.value().getExtValue()) + ") ";
-                                continue;
-                            }
-                        }
-                    }
-                    // alignment specified as a type: alignas(SomeType)
-                    out += "alignas(" + alignedAttr->getAlignmentType()->getType().getAsString() + ") ";
-                    continue;
-                }
-                if (const auto* nodiscard = clang::dyn_cast<clang::WarnUnusedResultAttr>(attr))
-                {
-                    const llvm::StringRef msg = nodiscard->getMessage();
-                    out += msg.empty() ? "[[nodiscard]] " : ("[[nodiscard(\"" + msg.str() + "\")]] ");
-                    continue;
-                }
-                if (const auto* deprecated = clang::dyn_cast<clang::DeprecatedAttr>(attr))
-                {
-                    const llvm::StringRef msg = deprecated->getMessage();
-                    out += msg.empty() ? "[[deprecated]] " : ("[[deprecated(\"" + msg.str() + "\")]] ");
-                    continue;
-                }
-
-                // attributes other than alignas, nodiscard and deprecated
-                std::string raw;
-                llvm::raw_string_ostream os(raw);
-                attr->printPretty(os, printPolicy);
-                os.flush();
-
-                // strip off ("")
-                constexpr std::string_view empty_parens = "(\"\")";
-                if (auto pos = raw.find(empty_parens); pos != std::string::npos)
-                    raw.replace(pos, empty_parens.size(), "");
-                out += raw + " ";
-            }
+            out += ConstructAttributes(recordDecl);
 
             // name
             out += recordDecl->getQualifiedNameAsString() + " ";
@@ -543,6 +491,7 @@ namespace OdrCop2
             else
                 out += " {\n";
 
+            // data-members and methods
             for (const clang::Decl* decl : recordDecl->decls())
             {
                 if (const auto* field = clang::dyn_cast<clang::FieldDecl>(decl))
@@ -554,6 +503,9 @@ namespace OdrCop2
                     case AS_private:   out += "private:   "; break;
                     default:           out += "           "; break;
                     }
+
+                    // attributes on data-members
+                    out += ConstructAttributes(decl);
 
                     { // field: must be done this way to handle array fields as well.
                         std::string fieldStr;
@@ -596,6 +548,64 @@ namespace OdrCop2
             }
 
             out += "}";
+            return out;
+        }
+
+        std::string ConstructAttribute(const Attr* attr)
+        {
+            std::string out;
+
+            if (const auto* alignedAttr = clang::dyn_cast<clang::AlignedAttr>(attr))
+            {
+                if (alignedAttr->isAlignmentExpr())
+                {
+                    const clang::Expr* expr = alignedAttr->getAlignmentExpr();
+                    if (expr && expr->isIntegerConstantExpr(*context))
+                    {
+                        auto optInt = expr->getIntegerConstantExpr(*context);
+                        if (optInt.has_value())
+                        {
+                            out += "alignas(" + std::to_string(optInt.value().getExtValue()) + ") ";
+                            return out;
+                        }
+                    }
+                }
+                // alignment specified as a type: alignas(SomeType)
+                out += "alignas(" + alignedAttr->getAlignmentType()->getType().getAsString() + ") ";
+                return out;
+            }
+            if (const auto* nodiscard = clang::dyn_cast<clang::WarnUnusedResultAttr>(attr))
+            {
+                const llvm::StringRef msg = nodiscard->getMessage();
+                out += msg.empty() ? "[[nodiscard]] " : ("[[nodiscard(\"" + msg.str() + "\")]] ");
+                return out;
+            }
+            if (const auto* deprecated = clang::dyn_cast<clang::DeprecatedAttr>(attr))
+            {
+                const llvm::StringRef msg = deprecated->getMessage();
+                out += msg.empty() ? "[[deprecated]] " : ("[[deprecated(\"" + msg.str() + "\")]] ");
+                return out;
+            }
+
+            // attributes other than alignas, nodiscard and deprecated
+            std::string raw;
+            llvm::raw_string_ostream os(raw);
+            attr->printPretty(os, printPolicy);
+            os.flush();
+
+            // strip off ("")
+            constexpr std::string_view empty_parens = "(\"\")";
+            if (auto pos = raw.find(empty_parens); pos != std::string::npos)
+                raw.replace(pos, empty_parens.size(), "");
+            out += raw + " ";
+
+            return out;
+        }
+        std::string ConstructAttributes(const Decl* decl)
+        {
+            std::string out;
+            for(const auto* attr : decl->attrs())
+                out += ConstructAttribute(attr);
             return out;
         }
     };

@@ -111,6 +111,56 @@ Test UdtTests[] =
         }
     },
 
+    // attributes on data-members
+    {"class with attributes on data-members", []
+        {
+            std::string code = "struct S {"
+                               "   alignas(16)                    int a;"
+                               "   [[deprecated]]                 int b;"
+                               "   [[maybe_unused]]               int c;"
+                               "   [[deprecated(\"do not use\")]] int d;"
+                               "};";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            Assert::IsTrue(ok);
+            Assert::AreEqual(1, maps.udtMap.size());
+            const auto& vec = maps.udtMap.begin()->second;
+            Assert::AreEqual("struct S {\n"
+                             "public:    alignas(16) int a;\n"
+                             "public:    [[deprecated]] int b;\n"
+                             "public:    [[maybe_unused]] int c;\n"
+                             "public:    [[deprecated(\"do not use\")]] int d;\n"
+                             "}", vec[0].fullyQualified, "should have gotten all attributes on data-members");
+        }
+    },
+
+    // attributes on methods?
+    { "class with attributes on methods", []
+        {
+            std::string code = "struct S {"
+                               "[[nodiscard]]           int A();"
+                               "[[deprecated]]          int B();"
+                               "[[deprecated(\"msg\")]] int C();"
+                               "[[noreturn]]            int D();"
+                               "[[maybe_unused]]        int E();"
+                               "};";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            Assert::IsTrue(ok);
+            Assert::AreEqual(1, maps.udtMap.size());
+            const auto& vec = maps.udtMap.begin()->second;
+            Assert::AreEqual("struct S {\n"
+                             "public:    [[nodiscard]] int __cdecl A();\n"
+                             "public:    [[deprecated]] int __cdecl B();\n"
+                             "public:    [[deprecated(\"msg\")]] int __cdecl C();\n"
+                             "public:    [[noreturn]] int __cdecl D();\n"
+                             "public:    [[maybe_unused]] int __cdecl E();\n"
+                             "}", vec[0].fullyQualified, "should have gotten all attributes on data-members");
+        }
+    },
+
     // bases
     { "class with bases", []
         {
