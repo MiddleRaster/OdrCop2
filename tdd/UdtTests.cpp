@@ -178,6 +178,20 @@ Test UdtTests[] =
         }
     },
 
+    // final structs/classes
+    { "class with final", []
+        {
+            std::string code = "class Class final {};";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            Assert::IsTrue(ok);
+            Assert::AreEqual(1, maps.udtMap.size(), "number of UDTs found");
+            const auto& vec = maps.udtMap.begin()->second;
+            Assert::AreEqual("class Class final {\n}", vec[0].fullyQualified, "should have gotten final");
+        }
+    },
+
     // templates
     {"simple class template", []
         {

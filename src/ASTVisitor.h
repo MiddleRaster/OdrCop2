@@ -486,10 +486,15 @@ namespace OdrCop2
 
                 out += base.getType().getAsString(printPolicy);
             }
-            if (firstBase)
-                out += "{\n";
-            else
-                out += " {\n";
+            if (firstBase == false)
+                out += " ";
+
+            // final
+            if (true == recordDecl->hasAttr<FinalAttr>())
+                out += "final ";
+
+            // add sizeof comment here
+            out += "{\n";
 
             // data-members and methods
             for (const clang::Decl* decl : recordDecl->decls())
@@ -587,7 +592,11 @@ namespace OdrCop2
                 return out;
             }
 
-            // attributes other than alignas, nodiscard and deprecated
+            // filter out final (maybe more?)
+            if (const auto* Final = clang::dyn_cast<clang::FinalAttr>(attr))
+                return out;
+
+            // attributes other than alignas, nodiscard and deprecated, nor final
             std::string raw;
             llvm::raw_string_ostream os(raw);
             attr->printPretty(os, printPolicy);
