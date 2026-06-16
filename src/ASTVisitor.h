@@ -515,8 +515,33 @@ namespace OdrCop2
             }
 
             // name
-            out += recordDecl->getQualifiedNameAsString();
-            out += " {\n";
+            out += recordDecl->getQualifiedNameAsString() + " ";
+
+            // base classes
+            bool firstBase = true;
+            for (const clang::CXXBaseSpecifier& base : recordDecl->bases())
+            {
+                if (firstBase)
+                    out += ": ";
+                else
+                    out += ", ";
+                firstBase = false;
+
+                switch (base.getAccessSpecifier()) {
+                case clang::AS_public:    out += "public ";    break;
+                case clang::AS_protected: out += "protected "; break;
+                case clang::AS_private:   out += "private ";   break;
+                case clang::AS_none:      out += " ";          break; // depends on context
+                }
+                if (base.isVirtual())
+                    out += "virtual ";
+
+                out += base.getType().getAsString(printPolicy);
+            }
+            if (firstBase)
+                out += "{\n";
+            else
+                out += " {\n";
 
             for (const clang::Decl* decl : recordDecl->decls())
             {

@@ -111,6 +111,22 @@ Test UdtTests[] =
         }
     },
 
+    // bases
+    { "class with bases", []
+        {
+            std::string code = "struct PrivateBase{}; struct PublicBase{}; struct VirtualBase{};"
+                               "class Class : PrivateBase, public PublicBase, virtual VirtualBase {"
+                               "};";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            Assert::IsTrue(ok);
+            Assert::AreEqual(4, maps.udtMap.size(), "number of UDTs found");
+            const auto& vec = maps.udtMap.begin()->second;
+            Assert::AreEqual("class Class : private PrivateBase, public PublicBase, private virtual VirtualBase {\n"
+                             "}", vec[0].fullyQualified, "should have gotten all bases");
+        }
+    },
 
     // templates
     {"simple class template", []
@@ -195,6 +211,28 @@ Test UdtTests[] =
             Assert::AreEqual("template<template<typename> class Container> class Wrapper {\n"
                              "public:    Container<int> contents;\n"
                              "}", vec[0].fullyQualified, "can get template template parameter");
+        }
+    },
+
+    {"can do canonical TBCI pattern", []
+        {
+            std::string code = "struct Empty{};"
+                               "template<typename T> struct StructT : private T {};"
+                               "using Struct = StructT<Empty>;";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            Assert::IsTrue(ok);
+            Assert::AreEqual(2, maps.    udtMap.size(), "should see 2 UDTs");
+            Assert::AreEqual(1, maps.typedefMap.size(), "should see 1 typedef/alias");
+
+            auto it = maps.udtMap.begin();
+            Assert::AreEqual("struct Empty {\n"
+                             "}", it->second[0].fullyQualified, "can get Empty struct");
+            ++it;
+            Assert::AreEqual("template<typename T> struct StructT : private T {\n"
+                             "}", it->second[0].fullyQualified, "can get struct refactored to TBCI");
+            Assert::AreEqual("Struct = StructT<Empty>", maps.typedefMap.begin()->second[0].fullyQualified, "can get typedef/alias");
         }
     },
 };
