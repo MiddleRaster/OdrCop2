@@ -463,8 +463,58 @@ namespace OdrCop2
                 out += "> ";
             }
 
-            // struct/class/union keyword + name
+            // struct/class/union keyword
             out += recordDecl->getKindName().str() + " ";
+
+            // alignas/[[attributes]]/__declspecs
+            for(const auto* attr : recordDecl->attrs())
+            {
+                if (const auto* alignedAttr = clang::dyn_cast<clang::AlignedAttr>(attr))
+                {
+                    if (alignedAttr->isAlignmentExpr())
+                    {
+                        const clang::Expr* expr = alignedAttr->getAlignmentExpr();
+                        if (expr && expr->isIntegerConstantExpr(*context))
+                        {
+                            auto optInt = expr->getIntegerConstantExpr(*context);
+                            if (optInt.has_value())
+                            {
+                                out += "alignas(" + std::to_string(optInt.value().getExtValue()) + ") ";
+                                continue;
+                            }
+                        }
+                    }
+                    // alignment specified as a type: alignas(SomeType)
+                    out += "alignas(" + alignedAttr->getAlignmentType()->getType().getAsString() + ") ";
+                    continue;
+                }
+                if (const auto* nodiscard = clang::dyn_cast<clang::WarnUnusedResultAttr>(attr))
+                {
+                    const llvm::StringRef msg = nodiscard->getMessage();
+                    out += msg.empty() ? "[[nodiscard]] " : ("[[nodiscard(\"" + msg.str() + "\")]] ");
+                    continue;
+                }
+                if (const auto* deprecated = clang::dyn_cast<clang::DeprecatedAttr>(attr))
+                {
+                    const llvm::StringRef msg = deprecated->getMessage();
+                    out += msg.empty() ? "[[deprecated]] " : ("[[deprecated(\"" + msg.str() + "\")]] ");
+                    continue;
+                }
+
+                // attributes other than alignas, nodiscard and deprecated
+                std::string raw;
+                llvm::raw_string_ostream os(raw);
+                attr->printPretty(os, printPolicy);
+                os.flush();
+
+                // strip off ("")
+                constexpr std::string_view empty_parens = "(\"\")";
+                if (auto pos = raw.find(empty_parens); pos != std::string::npos)
+                    raw.replace(pos, empty_parens.size(), "");
+                out += raw + " ";
+            }
+
+            // name
             out += recordDecl->getQualifiedNameAsString();
             out += " {\n";
 

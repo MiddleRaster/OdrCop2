@@ -75,6 +75,43 @@ Test UdtTests[] =
                              "}", vec[0].fullyQualified, "should have gotten the entire struct but not the function body");
         }
     },
+
+    // attributes
+    {"class with alignas, [[nodiscard]] and [[maybe_unused]]", []
+        {
+            std::string code = "class alignas(16) [[nodiscard]] [[maybe_unused]] Class {"
+                               "public: int x;"
+                               "};";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            Assert::IsTrue(ok);
+            Assert::AreEqual(1, maps.udtMap.size());
+            const auto& vec = maps.udtMap.begin()->second;
+            Assert::AreEqual("class alignas(16) [[nodiscard]] [[maybe_unused]] Class {\n"
+                             "public:    int x;\n"
+                             "}", vec[0].fullyQualified, "should have gotten the alignas, nodiscard and maybe_unused attributes");
+        }
+    },
+    // __declspecs
+    {"class with __declspec", []
+        {
+            std::string code = "class __declspec(uuid(\"0cd80b87-432f-4568-80b9-be5444d0fd23\")) alignas(double) [[nodiscard]] [[maybe_unused]] Class {"
+                               "public: int x;"
+                               "};";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            Assert::IsTrue(ok);
+            Assert::AreEqual(1, maps.udtMap.size());
+            const auto& vec = maps.udtMap.begin()->second;
+            Assert::AreEqual("class __declspec(uuid(\"0cd80b87-432f-4568-80b9-be5444d0fd23\")) alignas(double) [[nodiscard]] [[maybe_unused]] Class {\n"
+                             "public:    int x;\n"
+                             "}", vec[0].fullyQualified, "should have gotten __declspec along with the alignas, nodiscard and maybe_unused attributes");
+        }
+    },
+
+
     // templates
     {"simple class template", []
         {
@@ -145,8 +182,6 @@ Test UdtTests[] =
                              "}", vec[0].fullyQualified, "can get class template with int parameter type");
         }
     },
-
-
     {"can do template template parameter", []
         {
             std::string code = "template<template<typename> class Container> class Wrapper {"
