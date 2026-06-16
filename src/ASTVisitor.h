@@ -195,11 +195,11 @@ namespace OdrCop2
                 fqn += "consteval ";
 
             // return type
-         // fqn += funcDecl->getReturnType().getCanonicalType().getAsString(printPolicy) + " ";
-            if (funcDecl->getDescribedFunctionTemplate() != nullptr)
-                fqn += funcDecl->getReturnType().getAsString(printPolicy) + " ";
-            else
-                fqn += funcDecl->getReturnType().getCanonicalType().getAsString(printPolicy) + " ";
+            const auto* parentRecord = clang::dyn_cast<clang::CXXRecordDecl>(funcDecl->getParent());
+            bool   isTemplateContext = funcDecl->getDescribedFunctionTemplate() != nullptr || (parentRecord && parentRecord->getDescribedClassTemplate() != nullptr);
+            fqn += isTemplateContext ? funcDecl->getReturnType().getAsString(printPolicy)
+                                     : funcDecl->getReturnType().getCanonicalType().getAsString(printPolicy);
+            fqn += " ";
 
             // calling convention
             switch (funcDecl->getType()->castAs<FunctionType>()->getCallConv())
@@ -236,8 +236,8 @@ namespace OdrCop2
 
                 if (const auto* args = funcDecl->getTemplateSpecializationArgs())
                 {
-                    llvm::raw_string_ostream  os2(out);
                     out += "<";
+                    llvm::raw_string_ostream  os2(out);
                     bool first = true;
                     for (const TemplateArgument& arg : args->asArray())
                     {
@@ -259,9 +259,8 @@ namespace OdrCop2
             {
                 QualType    type     = param->getType();
                 std::string typeName = type.getAsString(printPolicy);
-             // std::string name     = param->getNameAsString();   // empty if unnamed
 
-                fqn += typeName; // +" " + name;
+                fqn += typeName;
 
                 // Default argument, if any
                 if (param->hasDefaultArg())
@@ -412,11 +411,62 @@ namespace OdrCop2
         {
             std::string out;
 
+            const clang::ClassTemplateDecl* ctd = recordDecl->getDescribedClassTemplate();
+            if (ctd)
+            {
+                bool first = true;
+                out        = "template<";
+                const clang::TemplateParameterList* params = ctd->getTemplateParameters();
+                for (const clang::NamedDecl* param : *params)
+                {
+                    if (!first)
+                        out += ", ";
+                    first = false;
+
+                    if (const auto* ttp = clang::dyn_cast<clang::TemplateTypeParmDecl>(param))
+                    {
+                        out += ttp->wasDeclaredWithTypename() ? "typename" : "class";
+                        if (!ttp->getName().empty())
+                            out += " " + ttp->getName().str();
+                    }
+                    else if (const auto* nttp = clang::dyn_cast<clang::NonTypeTemplateParmDecl>(param))
+                    {
+                        out += nttp->getType().getAsString(printPolicy);
+                        if (!nttp->getName().empty())
+                            out += " " + nttp->getName().str();
+                    }
+                    else if (const auto* ttp2 = clang::dyn_cast<clang::TemplateTemplateParmDecl>(param))
+                    {
+                        out += "template<";
+                        const clang::TemplateParameterList* innerParams = ttp2->getTemplateParameters();
+                        bool first2 = true;
+                        for (const clang::NamedDecl* innerParam : *innerParams)
+                        {
+                            if (!first2)
+                                out += ", ";
+                            first2 = false;
+
+                            if (const auto* innerTtp = clang::dyn_cast<clang::TemplateTypeParmDecl>(innerParam))
+                                out += innerTtp->wasDeclaredWithTypename() ? "typename" : "class";
+                            else if (const auto* innerNttp = clang::dyn_cast<clang::NonTypeTemplateParmDecl>(innerParam))
+                            {
+                                out += innerNttp->getType().getAsString(printPolicy);
+                                if (!innerNttp->getName().empty())
+                                    out += " " + innerNttp->getName().str();
+                            }
+                        }
+                        out += "> class";
+                        if (!ttp2->getName().empty())
+                            out += " " + ttp2->getName().str();
+                    }
+                }
+                out += "> ";
+            }
+
             // struct/class/union keyword + name
             out += recordDecl->getKindName().str() + " ";
             out += recordDecl->getQualifiedNameAsString();
             out += " {\n";
-
 
             for (const clang::Decl* decl : recordDecl->decls())
             {
@@ -430,8 +480,13 @@ namespace OdrCop2
                     default:           out += "           "; break;
                     }
 
-                    out += field->getType().getCanonicalType().getAsString(printPolicy) + " ";
-                    out += field->getNameAsString();
+                    { // field: must be done this way to handle array fields as well.
+                        std::string fieldStr;
+                        llvm::raw_string_ostream os(fieldStr);
+                        field->getType().print(os, printPolicy, field->getNameAsString());
+                        os.flush();
+                        out += fieldStr;
+                    }
 
                     if (field->isBitField())
                     {
