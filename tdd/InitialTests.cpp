@@ -174,7 +174,7 @@ Test ExploringOdrViolationReportingTests[] =
             std::ostringstream oss;
             int violations = OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.enumMap, oss);
             Assert::AreEqual(1, violations, "should have been one ODR violation");
-            Assert::AreEqual("ODR VIOLATION: Hi::Color\n[tu1.cpp]\nenum class Hi::Color : int { Red=0, Green=1, Blue=2 };\n[tu2.cpp]\nenum Hi::Color { Red=0, Green=1, Blue=2 };\n[tu3.cpp]\nenum Hi::Color : int { Red=0, Green=1, Blue=2 };\n", oss.str());
+            Assert::AreEqual("\nODR VIOLATION: Hi::Color\n[tu1.cpp]\nenum class Hi::Color : int { Red=0, Green=1, Blue=2 };\n[tu2.cpp]\nenum Hi::Color { Red=0, Green=1, Blue=2 };\n[tu3.cpp]\nenum Hi::Color : int { Red=0, Green=1, Blue=2 };\n", oss.str());
         }
     },
     {"Report typedef/using ODR violations", []
@@ -196,7 +196,7 @@ Test ExploringOdrViolationReportingTests[] =
             std::ostringstream oss;
             int violations = OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.typedefMap, oss);
             Assert::AreEqual(1, violations, "should have been one ODR violation");
-            Assert::AreEqual("ODR VIOLATION: Hi::INT\n[tu1.cpp]\nHi::INT = int\n[tu2.cpp]\nHi::INT = unsigned int\n[tu3.cpp] - same as above\n", oss.str());
+            Assert::AreEqual("\nODR VIOLATION: Hi::INT\n[tu1.cpp]\nHi::INT = int\n[tu2.cpp]\nHi::INT = unsigned int\n[tu3.cpp] - same as above\n", oss.str());
         }
     },
     {"Report function ODR violations", []
@@ -218,7 +218,7 @@ Test ExploringOdrViolationReportingTests[] =
             std::ostringstream oss;
             int violations = OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.functionMap, oss);
             Assert::AreEqual(1, violations, "should have been one ODR violation");
-            Assert::AreEqual("ODR VIOLATION: ?foo@@YAXXZ\n[tu1.cpp]\ninline void __cdecl foo()\n[tu2.cpp]\nvoid __cdecl foo()\n[tu3.cpp] - same as above\n", oss.str());
+            Assert::AreEqual("\nODR VIOLATION: ?foo@@YAXXZ\n[tu1.cpp]\ninline void __cdecl foo()\n[tu2.cpp]\nvoid __cdecl foo()\n[tu3.cpp] - same as above\n", oss.str());
         }
     },
     {"Report UDT ODR violations", []
@@ -238,7 +238,7 @@ Test ExploringOdrViolationReportingTests[] =
             std::ostringstream oss;
             int violations = OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.udtMap, oss);
             Assert::AreEqual(1, violations, "should have been one ODR violation");
-            Assert::AreEqual("ODR VIOLATION: S\n"
+            Assert::AreEqual("\nODR VIOLATION: S\n"
                              "[tu1.cpp]\n"
                              "struct S { // sizeof=4\n"
                              "public:    int x;\n"

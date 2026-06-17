@@ -17,9 +17,14 @@ Test JsonTests[] =
     {"Can read compile_commands.json file", []
         {
             auto fqfns = OdrCop2::Find::FullyQualifiedFileNames();
-            Assert::AreEqual(2, fqfns.size(), "there should have been 2 fqfns found");
-            Assert::AreEqual("x64\\\\Debug\\\\\\\\AnotherFile.obj", fqfns[0]);
-            Assert::AreEqual("x64\\\\Debug\\\\\\\\demo.obj",        fqfns[1]);
+            Assert::AreEqual(7, fqfns.size(), "there should have been 2 fqfns found");
+            Assert::AreEqual("x64\\\\Debug\\\\\\\\AnotherFile.obj",     fqfns[0]);
+            Assert::AreEqual("x64\\\\Debug\\\\\\\\demo.obj",            fqfns[1]);
+            Assert::AreEqual("x64\\\\Debug\\\\\\\\RegressionTests.obj", fqfns[2]);
+            Assert::AreEqual("x64\\\\Debug\\\\\\\\TU1.obj",             fqfns[3]);
+            Assert::AreEqual("x64\\\\Debug\\\\\\\\TU2.obj",             fqfns[4]);
+            Assert::AreEqual("x64\\\\Debug\\\\\\\\TU3.obj",             fqfns[5]);
+            Assert::AreEqual("x64\\\\Debug\\\\\\\\TU4.obj",             fqfns[6]);
         }
     },
     {"trying out CommandLineArgsW", []

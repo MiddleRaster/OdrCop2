@@ -768,7 +768,7 @@ namespace OdrCop2
                 //}
 
                 ++violationCount;
-                out << "ODR VIOLATION: " << name << '\n';
+                out << "\nODR VIOLATION: " << name << '\n';
 
                 std::vector<bool> printed(items.size(), false);
                 for (size_t i=0; i<items.size(); ++i)
