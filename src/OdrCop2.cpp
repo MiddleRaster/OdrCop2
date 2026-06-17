@@ -27,10 +27,14 @@ int wmain(int argc, wchar_t** argv)
     OdrCop2::VisitorActionFactory factory(maps);
     tool.run(&factory);
 
-    std::wcout << L"functions found:\n";          for (const auto& [key, vec] : maps.functionMap) for (auto& fi : vec) std::cout << fi.TU << ": " << fi.fullyQualified << '\n';
-    std::wcout << L"typedef/aliases found:\n";    for (const auto& [key, vec] : maps.typedefMap ) for (auto& fi : vec) std::cout << fi.TU << ": " << fi.fullyQualified << '\n';
-    std::wcout << L"enums found:\n";              for (const auto& [key, vec] : maps.enumMap    ) for (auto& fi : vec) std::cout << fi.TU << ": " << fi.fullyQualified << '\n';
-    std::wcout << L"user-defined types found:\n"; for (const auto& [key, vec] : maps.udtMap     ) for (auto& fi : vec) std::cout << fi.TU << ": " << fi.fullyQualified << '\n';
-
+    int violations  = 0;
+        violations += OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.    enumMap, std::cout);
+        violations += OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.functionMap, std::cout);
+        violations += OdrCop2::OdrViolationReporter::ReportOdrViolations(maps. typedefMap, std::cout);
+        violations += OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.     udtMap, std::cout);
+    if (violations == 0)
+        std::wcout << L"No ODR violations found.\n";
+    else
+        std::wcout << violations << L" ODR violation(s) found.\n";
     return 0;
 }
