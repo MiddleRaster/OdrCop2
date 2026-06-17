@@ -645,7 +645,7 @@ namespace OdrCop2
                 }
             }
 
-            out += "}";
+            out += "};";
             return out;
         }
 
@@ -740,5 +740,57 @@ namespace OdrCop2
     public:
         explicit VisitorActionFactory(AllMaps& maps) : maps(maps) {}
         std::unique_ptr<clang::FrontendAction> create() override { return std::make_unique<VisitorAction>(maps); }
+    };
+
+
+    struct OdrViolationReporter
+    {
+        template<typename T, typename Out> static int ReportOdrViolations(const std::map<std::string,T>& map, Out&& out)
+        {
+            int violationCount = 0;
+            for (auto& [name, items] : map)
+            {
+                if (items.size() < 2)
+                    continue;
+
+                //if (true == skipAnonymous(items[0]))
+                //    continue;
+
+                if (std::all_of(items.begin() + 1, items.end(), [&](const auto& x) { return x == items[0]; }))
+                    continue;
+
+                // find mismatch index
+                //int mismatch = -1;
+                //for (size_t m = 1; m < items.size(); ++m)
+                //{
+                //    if (-1 != (mismatch = getMismatchIndex(items[0], items[m])))
+                //        break;
+                //}
+
+                ++violationCount;
+                out << "ODR VIOLATION: " << name << '\n';
+
+                std::vector<bool> printed(items.size(), false);
+                for (size_t i=0; i<items.size(); ++i)
+                {
+                    if (printed[i])
+                        continue;
+
+                    out << "[" << items[i].TU << "]\n";
+                    out        << items[i].fullyQualified << '\n';
+                    printed[i] = true;
+
+                    for (size_t j=i+1; j<items.size(); ++j)
+                    {
+                        if (!printed[j] && (items[i] == items[j]))
+                        {
+                            out << "[" << items[j].TU << "] - same as above\n";
+                            printed[j] = true;
+                        }
+                    }
+                }
+            }
+            return violationCount;
+        }
     };
 }
