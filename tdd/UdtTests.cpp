@@ -299,4 +299,39 @@ Test UdtTests[] =
             Assert::AreEqual("Struct = StructT<Empty>", maps.typedefMap.begin()->second[0].fullyQualified, "can get typedef/alias");
         }
     },
+
+    // template key stuff
+    {"primary template, instantiation and specialization all have different keys into map", []
+        {
+            std::string code = "template<class T> struct S { T x; };"
+                               "template<> struct S<long> { long y; };"
+                               "void test() { S<int> s; }";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(1, maps.functionMap.size(), "should see 1 function");
+            { 
+                auto it = maps.functionMap.begin();
+                Assert::AreEqual("void __cdecl test()", it->second[0].fullyQualified, "can get the 'test' function");
+            }
+
+            Assert::AreEqual(3, maps.udtMap.size(), "should see 3 UDTs");
+            {
+                auto it = maps.udtMap.begin();
+                Assert::AreEqual("template<class T> struct S {\n"
+                                 "public:    T x;\n"
+                                 "}", it->second[0].fullyQualified, "can get primary template");
+                ++it;
+                Assert::AreEqual("template<> struct S<int> {\n"
+                                 "public:    int x;\n"
+                                 "}", it->second[0].fullyQualified, "can get template instantiation");
+                ++it;
+                Assert::AreEqual("template<> struct S<long> {\n"
+                                 "public:    long y;\n"
+                                 "}", it->second[0].fullyQualified, "can get template specialization");
+            }
+        }
+    },
 };

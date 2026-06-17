@@ -66,6 +66,9 @@ namespace OdrCop2
         {}
         bool VisitFunctionDecl(FunctionDecl* funcDecl)
         {
+            if (funcDecl->isImplicit())
+                return true;
+
             if (context->getSourceManager().isInSystemHeader(funcDecl->getLocation()))
                 return true; // skip anything not in the main file or a user header
 
@@ -76,6 +79,9 @@ namespace OdrCop2
             }
             return true;
         }
+
+        bool shouldVisitTemplateInstantiations() const { return true; }
+        bool shouldVisitImplicitCode          () const { return true; }
         bool VisitCXXRecordDecl(CXXRecordDecl* recordDecl)
         {
             if (context->getSourceManager().isInSystemHeader(recordDecl->getLocation()))
@@ -83,7 +89,11 @@ namespace OdrCop2
 
             if (recordDecl->isThisDeclarationADefinition())
             {
-                maps.udtMap[recordDecl->getQualifiedNameAsString()].push_back({TU, ConstructRecordSignature(recordDecl)});
+                std::string key = recordDecl->getQualifiedNameAsString();
+                     if (recordDecl->getDescribedClassTemplate())                            key += "<>";
+                else if (auto* CTSD = dyn_cast<ClassTemplateSpecializationDecl>(recordDecl)) key += TemplateArgsToString(CTSD->getTemplateArgs());
+
+                maps.udtMap[key].push_back({TU, ConstructRecordSignature(recordDecl)});
             }
             return true;
         }
@@ -115,6 +125,9 @@ namespace OdrCop2
         }
         bool VisitTypedefNameDecl(clang::TypedefNameDecl* typedefDecl)
         {
+            if (typedefDecl->isImplicit())
+                return true;
+
             if (context->getSourceManager().isInSystemHeader(typedefDecl->getLocation()))
                 return true; // skip anything not in the main file or a user header
 
@@ -126,6 +139,75 @@ namespace OdrCop2
         }
 
     private:
+        std::string TemplateArgsToString(const clang::TemplateArgumentList& args)
+        {
+            std::string out;
+            out += "<";
+
+            for (unsigned i = 0; i < args.size(); ++i)
+            {
+                if (i > 0)
+                    out += ", ";
+
+                const clang::TemplateArgument& arg = args[i];
+                switch (arg.getKind())
+                {
+                case clang::TemplateArgument::Type:              out += arg.getAsType().getAsString();                                                                break;
+                case clang::TemplateArgument::Integral:          out += llvm::toString(arg.getAsIntegral(), 10);                                                      break;
+                case clang::TemplateArgument::NullPtr:           out += "nullptr";                                                                                    break;
+                case clang::TemplateArgument::Declaration:       out += arg.getAsDecl()->getQualifiedNameAsString();                                                  break;
+                case clang::TemplateArgument::Null:              out += "null";                                                                                       break;
+                case clang::TemplateArgument::Template:          out += arg.getAsTemplate().getAsTemplateDecl()->getQualifiedNameAsString();                          break;
+                case clang::TemplateArgument::TemplateExpansion: out += arg.getAsTemplateOrTemplatePattern().getAsTemplateDecl()->getQualifiedNameAsString() + "..."; break;
+                case clang::TemplateArgument::Expression:
+                {
+                    std::string s;
+                    llvm::raw_string_ostream os(s);
+                    arg.getAsExpr()->printPretty(os, nullptr, context->getPrintingPolicy());
+                    out += os.str();
+                    break;
+                }
+                case clang::TemplateArgument::Pack:
+                {
+                    out += "{";
+                    auto pack = arg.pack_elements();
+                    for (unsigned j = 0; j < pack.size(); ++j) {
+                        if (j > 0)
+                            out += ", ";
+
+                        // Inline handling for pack elements
+                        const clang::TemplateArgument& pe = pack[j];
+                        switch (pe.getKind())
+                        {
+                        case clang::TemplateArgument::Type:              out += pe.getAsType().getAsString();                                                                break;
+                        case clang::TemplateArgument::Integral:          out += llvm::toString(pe.getAsIntegral(), 10);                                                      break;
+                        case clang::TemplateArgument::NullPtr:           out += "nullptr";                                                                                   break;
+                        case clang::TemplateArgument::Declaration:       out += pe.getAsDecl()->getQualifiedNameAsString();                                                  break;
+                        case clang::TemplateArgument::Null:              out += "null";                                                                                      break;
+                        case clang::TemplateArgument::Template:          out += pe.getAsTemplate().getAsTemplateDecl()->getQualifiedNameAsString();                          break;
+                        case clang::TemplateArgument::TemplateExpansion: out += pe.getAsTemplateOrTemplatePattern().getAsTemplateDecl()->getQualifiedNameAsString() + "..."; break;
+                        case clang::TemplateArgument::Expression:
+                        {
+                            std::string s;
+                            llvm::raw_string_ostream os(s);
+                            pe.getAsExpr()->printPretty(os, nullptr, context->getPrintingPolicy());
+                            out += os.str();
+                            break;
+                        }
+                        default:
+                            out += "?"; break;
+                        }
+                    }
+                    out += "}";
+                    break;
+                }
+                default: out += "?"; break;
+                }
+            }
+            out += ">";
+            return out;
+        }
+
         std::string ConstructFunctionSignature(const clang::FunctionDecl* funcDecl, bool wantFullyQualifiedMethodName=true)
         {
             std::string fqn;
@@ -454,8 +536,9 @@ namespace OdrCop2
                     }
                 }
                 out += "> ";
-            }
-
+            } else if (auto* CTSD = dyn_cast<ClassTemplateSpecializationDecl>(recordDecl))
+                out += "template<> ";
+            
             // struct/class/union keyword
             out += recordDecl->getKindName().str() + " ";
 
@@ -463,7 +546,13 @@ namespace OdrCop2
             out += ConstructAttributes(recordDecl);
 
             // name
-            out += recordDecl->getQualifiedNameAsString() + " ";
+            out += recordDecl->getQualifiedNameAsString(); // note: no space until after any <> stuff
+
+            // if it's a template instantiation, add <arg> 
+            if (auto* CTSD = dyn_cast<ClassTemplateSpecializationDecl>(recordDecl))
+                out += TemplateArgsToString(CTSD->getTemplateArgs());
+
+            out += " ";
 
             // base classes
             bool firstBase = true;
