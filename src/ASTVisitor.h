@@ -9,6 +9,7 @@
 #include <clang\AST\Mangle.h>
 #include <clang\AST\Decl.h>
 #include <clang\AST\GlobalDecl.h>
+#include <clang\AST\RecordLayout.h>
 #include <llvm\Support\raw_ostream.h>
 using namespace clang;
 
@@ -582,8 +583,11 @@ namespace OdrCop2
             if (true == recordDecl->hasAttr<FinalAttr>())
                 out += "final ";
 
-            // add sizeof comment here
-            out += "{\n";
+            // sizeof as comment
+            if (recordDecl->isCompleteDefinition() && !recordDecl->isDependentType())
+                out += "{ // sizeof=" + std::to_string(context->getASTRecordLayout(recordDecl).getSize().getQuantity()) + "\n";
+            else
+                out += "{\n";
 
             // data-members and methods
             for (const clang::Decl* decl : recordDecl->decls())

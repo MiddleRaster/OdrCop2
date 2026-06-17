@@ -468,11 +468,11 @@ Test ExploringOdrViolationReportingTests[] =
             Assert::AreEqual(1, violations, "should have been one ODR violation");
             Assert::AreEqual("ODR VIOLATION: S\n"
                              "[tu1.cpp]\n"
-                             "struct S {\n"
+                             "struct S { // sizeof=4\n"
                              "public:    int x;\n"
                              "};\n"
                              "[tu2.cpp]\n"
-                             "struct S {\n"
+                             "struct S { // sizeof=4\n"
                              "public:    long x;\n"
                              "};\n", oss.str(), "should have been one ODR violation");
         }
