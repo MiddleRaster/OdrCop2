@@ -745,6 +745,14 @@ namespace OdrCop2
 
     struct OdrViolationReporter
     {
+        template<typename Out> static int ReportOdrViolations(const AllMaps& maps, Out&& out)
+        {
+            return OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.    enumMap, std::cout)
+                 + OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.functionMap, std::cout)
+                 + OdrCop2::OdrViolationReporter::ReportOdrViolations(maps. typedefMap, std::cout)
+                 + OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.     udtMap, std::cout);
+        }
+
         template<typename T, typename Out> static int ReportOdrViolations(const std::map<std::string,T>& map, Out&& out)
         {
             int violationCount = 0;

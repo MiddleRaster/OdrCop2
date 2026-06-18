@@ -160,6 +160,7 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="ComprehensiveTests.cpp" />
     <ClCompile Include="EnumTests.cpp" />
     <ClCompile Include="FunctionTests.cpp" />
     <ClCompile Include="headers\stdafx.cpp">
