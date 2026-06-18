@@ -498,23 +498,29 @@ Test ComprehensiveTests[] =
                             "};\n", output);
         }
     },
-    //{"TU34-025: Same external-linkage struct name, anonymous union member type differs. Expected ODR violation: YES.", []
-    //    {
-    //        const auto& [violations, output] = RunTest( "struct DifferentAnonymousUnionMember { int tag; union { int i; float  f; }; };"
-    //                                                ,   "struct DifferentAnonymousUnionMember { int tag; union { int i; double f; }; };");
-    //        Assert::AreEqual(1, violations, "there should be 1 ODR violation");
-    //        Assert::AreEqual("\n"
-    //                        "ODR VIOLATION: DifferentAnonymousUnionMember\n"
-    //                        "[tu3.cpp]\n"
-    //                        "struct DifferentAnonymousUnionMember { // sizeof=8\n"
-    //                        "   int tag;\n"
-    //                        "   DifferentAnonymousUnionMember::(anonymous union at tu3.cpp:1:49);\n"
-    //                        "};\n"
-    //                        "[tu4.cpp]\n"
-    //                        "struct DifferentAnonymousUnionMember { // sizeof=16\n"
-    //                        "   int tag;\n"
-    //                        "   DifferentAnonymousUnionMember::(anonymous union at tu4.cpp:1:49);\n"
-    //                        "};\n", output);
-    //    }
-    //},
+    {"TU34-025: Same external-linkage struct name, anonymous union member type differs. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentAnonymousUnionMember { int tag; union { int i; float  f; }; };"
+                                                    ,   "struct DifferentAnonymousUnionMember { int tag; union { int i; double f; }; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentAnonymousUnionMember\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentAnonymousUnionMember { // sizeof=8\n"
+                            "   int tag;\n"
+                            "   union  { // sizeof=4\n"
+                            "      int i;\n"
+                            "      float f;\n"
+                            "   };\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentAnonymousUnionMember { // sizeof=16\n"
+                            "   int tag;\n"
+                            "   union  { // sizeof=8\n"
+                            "      int i;\n"
+                            "      double f;\n"
+                            "   };\n"
+                            "};\n", output);
+        }
+    },
 };

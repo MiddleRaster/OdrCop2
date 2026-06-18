@@ -473,7 +473,7 @@ namespace OdrCop2
             return out;
         }
 
-        std::string ConstructRecordSignature(CXXRecordDecl* recordDecl)
+        std::string ConstructRecordSignature(const CXXRecordDecl* recordDecl)
         {
             std::string out;
 
@@ -537,8 +537,9 @@ namespace OdrCop2
             // alignas/[[attributes]]/__declspecs
             out += ConstructAttributes(recordDecl);
 
-            // name
-            out += recordDecl->getQualifiedNameAsString(); // note: no space until after any <> stuff
+            // name (if not nameless)
+            if (!recordDecl->isAnonymousStructOrUnion())
+                out += recordDecl->getQualifiedNameAsString(); // note: no space until after any <> stuff
 
             // if it's a template instantiation, add <arg> 
             if (auto* CTSD = dyn_cast<ClassTemplateSpecializationDecl>(recordDecl))
@@ -597,6 +598,10 @@ namespace OdrCop2
                 }
                 if (const auto* field = clang::dyn_cast<clang::FieldDecl>(decl))
                 {   // data members
+
+                    if (field->isAnonymousStructOrUnion())
+                        continue; // nameless unions/struct never have a variable name
+
                     out += "   ";
 
                     // attributes on data-members
@@ -680,12 +685,11 @@ namespace OdrCop2
                     if (nested->isInjectedClassName())
                         continue;
 
-                    out += "nested type from CXXRecordDecl: ";
-                    out += decl->getDeclKindName();
-                    out += " ";
-                    if (const auto* named = clang::dyn_cast<clang::NamedDecl>(decl))
-                        out += named->getNameAsString();
-                    out += "\n";
+                    // recurse but indent
+                    std::istringstream iss(ConstructRecordSignature(nested));
+                    for (std::string line; std::getline(iss, line); )
+                        out += "   " + line + "\n";
+
                     continue;
                 }
 
