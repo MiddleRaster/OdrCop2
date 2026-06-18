@@ -692,14 +692,16 @@ namespace OdrCop2
 
                     continue;
                 }
+                if (clang::isa<clang::IndirectFieldDecl>(decl))
+                    continue; // these are Clang's mechanism for exposing the members of an anonymous struct/union as if they were directly accessible in the enclosing class.
 
                 { // unhandled
-                    //out += "unhandled clang::Decl ";
-                    //out += decl->getDeclKindName();
-                    //out += " ";
-                    //if (const auto* named = clang::dyn_cast<clang::NamedDecl>(decl))
-                    //    out += named->getNameAsString();
-                    //out += "\n";
+                    out += "unhandled clang::Decl ";
+                    out += decl->getDeclKindName();
+                    out += " ";
+                    if (const auto* named = clang::dyn_cast<clang::NamedDecl>(decl))
+                        out += named->getNameAsString();
+                    out += "\n";
                 }
             }
 
