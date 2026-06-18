@@ -18,7 +18,7 @@ Test UdtTests[] =
             Assert::IsTrue(ok);
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
-            Assert::AreEqual("struct S { // sizeof=4\npublic:    int x;\n};", vec[0].fullyQualified, "should have gotten the entire struct but not the method body");
+            Assert::AreEqual("struct S { // sizeof=4\n   int x;\n};", vec[0].fullyQualified, "should have gotten the entire struct but not the method body");
         }
     },
     {"struct with single data member and one method", []
@@ -30,7 +30,7 @@ Test UdtTests[] =
             Assert::IsTrue(ok);
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
-            Assert::AreEqual("struct S { // sizeof=4\npublic:    int x;\npublic:    int __cdecl foo();\n};", vec[0].fullyQualified, "should have gotten the entire struct but not the function body");
+            Assert::AreEqual("struct S { // sizeof=4\n   int x;\n   int __cdecl foo();\n};", vec[0].fullyQualified, "should have gotten the entire struct but not the function body");
         }
     },
     {"class with one private method and one private data-member and one public method and one public data-member", []
@@ -49,10 +49,11 @@ Test UdtTests[] =
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
             Assert::AreEqual("class Class { // sizeof=8\n"
-                             "private:   void __cdecl Private();\n"
-                             "private:   const int privateInt=0;\n"
-                             "public:    int __cdecl Public() const;\n"
-                             "public:    const int publicInt{-1};\n"
+                             "   void __cdecl Private();\n"
+                             "   const int privateInt=0;\n"
+                             "public:\n"
+                             "   int __cdecl Public() const;\n"
+                             "   const int publicInt{-1};\n"
                              "};", vec[0].fullyQualified, "should have gotten the entire struct but not the function body");
         }
     },
@@ -71,7 +72,8 @@ Test UdtTests[] =
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
             Assert::AreEqual("class Class { // sizeof=4\n"
-                             "public:    int x : 4=3;\n"
+                             "public:\n"
+                             "   int x : 4=3;\n"
                              "};", vec[0].fullyQualified, "should have gotten the entire struct but not the function body");
         }
     },
@@ -89,7 +91,8 @@ Test UdtTests[] =
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
             Assert::AreEqual("class alignas(16) [[nodiscard]] [[maybe_unused]] Class { // sizeof=16\n"
-                             "public:    int x;\n"
+                             "public:\n"
+                             "   int x;\n"
                              "};", vec[0].fullyQualified, "should have gotten the alignas, nodiscard and maybe_unused attributes");
         }
     },
@@ -106,7 +109,8 @@ Test UdtTests[] =
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
             Assert::AreEqual("class __declspec(uuid(\"0cd80b87-432f-4568-80b9-be5444d0fd23\")) alignas(double) [[nodiscard]] [[maybe_unused]] Class { // sizeof=8\n"
-                             "public:    int x;\n"
+                             "public:\n"
+                             "   int x;\n"
                              "};", vec[0].fullyQualified, "should have gotten __declspec along with the alignas, nodiscard and maybe_unused attributes");
         }
     },
@@ -127,10 +131,10 @@ Test UdtTests[] =
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
             Assert::AreEqual("struct S { // sizeof=16\n"
-                             "public:    alignas(16) int a;\n"
-                             "public:    [[deprecated]] int b;\n"
-                             "public:    [[maybe_unused]] int c;\n"
-                             "public:    [[deprecated(\"do not use\")]] int d;\n"
+                             "   alignas(16) int a;\n"
+                             "   [[deprecated]] int b;\n"
+                             "   [[maybe_unused]] int c;\n"
+                             "   [[deprecated(\"do not use\")]] int d;\n"
                              "};", vec[0].fullyQualified, "should have gotten all attributes on data-members");
         }
     },
@@ -152,11 +156,11 @@ Test UdtTests[] =
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
             Assert::AreEqual("struct S { // sizeof=1\n"
-                             "public:    [[nodiscard]] int __cdecl A();\n"
-                             "public:    [[deprecated]] int __cdecl B();\n"
-                             "public:    [[deprecated(\"msg\")]] int __cdecl C();\n"
-                             "public:    [[noreturn]] int __cdecl D();\n"
-                             "public:    [[maybe_unused]] int __cdecl E();\n"
+                             "   [[nodiscard]] int __cdecl A();\n"
+                             "   [[deprecated]] int __cdecl B();\n"
+                             "   [[deprecated(\"msg\")]] int __cdecl C();\n"
+                             "   [[noreturn]] int __cdecl D();\n"
+                             "   [[maybe_unused]] int __cdecl E();\n"
                              "};", vec[0].fullyQualified, "should have gotten all attributes on data-members");
         }
     },
@@ -206,7 +210,8 @@ Test UdtTests[] =
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
             Assert::AreEqual("template<typename T> class TemplateClass {\n"
-                             "public:    T t;\n"
+                             "public:\n"
+                             "   T t;\n"
                              "};", vec[0].fullyQualified, "can get simple class template");
         }
     },
@@ -223,7 +228,8 @@ Test UdtTests[] =
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
             Assert::AreEqual("template<typename T> class TemplateClass {\n"
-                             "public:    T __cdecl MyMethod();\n"
+                             "public:\n"
+                             "   T __cdecl MyMethod();\n"
                              "};", vec[0].fullyQualified, "can get simple class template with method returning a T");
         }
     },
@@ -240,7 +246,8 @@ Test UdtTests[] =
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
             Assert::AreEqual("template<typename T> class TemplateClass {\n"
-                             "public:    void __cdecl MyMethod(T &);\n"
+                             "public:\n"
+                             "   void __cdecl MyMethod(T &);\n"
                              "};", vec[0].fullyQualified, "can get simple class template with method taking a T&");
         }
     },
@@ -257,8 +264,8 @@ Test UdtTests[] =
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
             Assert::AreEqual("template<int N> struct FixedBuffer {\n"
-                             "public:    int __cdecl size() const;\n"
-                             "public:    int data[N];\n"
+                             "   int __cdecl size() const;\n"
+                             "   int data[N];\n"
                              "};", vec[0].fullyQualified, "can get class template with int parameter type");
         }
     },
@@ -273,7 +280,8 @@ Test UdtTests[] =
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
             Assert::AreEqual("template<template<typename> class Container> class Wrapper {\n"
-                             "public:    Container<int> contents;\n"
+                             "public:\n"
+                             "   Container<int> contents;\n"
                              "};", vec[0].fullyQualified, "can get template template parameter");
         }
     },
@@ -321,15 +329,15 @@ Test UdtTests[] =
             {
                 auto it = maps.udtMap.begin();
                 Assert::AreEqual("template<class T> struct S {\n"
-                                 "public:    T x;\n"
+                                 "   T x;\n"
                                  "};", it->second[0].fullyQualified, "can get primary template");
                 ++it;
                 Assert::AreEqual("template<> struct S<int> { // sizeof=4\n"
-                                 "public:    int x;\n"
+                                 "   int x;\n"
                                  "};", it->second[0].fullyQualified, "can get template instantiation");
                 ++it;
                 Assert::AreEqual("template<> struct S<long> { // sizeof=4\n"
-                                 "public:    long y;\n"
+                                 "   long y;\n"
                                  "};", it->second[0].fullyQualified, "can get template specialization");
             }
         }

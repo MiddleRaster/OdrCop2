@@ -213,15 +213,6 @@ namespace OdrCop2
         {
             std::string fqn;
 
-            // access specifier
-            AccessSpecifier access = funcDecl->getAccess();
-            switch (access)
-            {
-            case AS_public:    fqn += "public:    "; break;
-            case AS_protected: fqn += "protected: "; break;
-            case AS_private:   fqn += "private:   "; break;
-            default:                                 break;
-            }
 
             // if it's a template, that comes first
             if (const FunctionTemplateDecl* ftd = funcDecl->getDescribedFunctionTemplate())
@@ -592,15 +583,21 @@ namespace OdrCop2
             // data-members and methods
             for (const clang::Decl* decl : recordDecl->decls())
             {
+                if (clang::isa<clang::AccessSpecDecl>(decl))
+                {
+                    const auto* access = clang::dyn_cast<clang::AccessSpecDecl>(decl);
+                    switch (access->getAccess())
+                    {
+                    case AS_public:    out += "public:\n";    break;
+                    case AS_protected: out += "protected\n:"; break;
+                    case AS_private:   out += "private:\n";   break;
+                    default:                                  break;
+                    }
+                    continue;
+                }
                 if (const auto* field = clang::dyn_cast<clang::FieldDecl>(decl))
                 {   // data members
-                    switch (field->getAccess())
-                    {
-                    case AS_public:    out += "public:    "; break;
-                    case AS_protected: out += "protected: "; break;
-                    case AS_private:   out += "private:   "; break;
-                    default:           out += "           "; break;
-                    }
+                    out += "   ";
 
                     // attributes on data-members
                     out += ConstructAttributes(decl);
@@ -634,16 +631,11 @@ namespace OdrCop2
                     }
 
                     out += ";\n";
+                    continue;
                 }
-                else if (const auto* var = clang::dyn_cast<clang::VarDecl>(decl))
+                if (const auto* var = clang::dyn_cast<clang::VarDecl>(decl))
                 {   // static data members  (VarDecl inside a record == static member)
-                    switch (var->getAccess())
-                    {
-                    case AS_public:    out += "public:    "; break;
-                    case AS_protected: out += "protected: "; break;
-                    case AS_private:   out += "private:   "; break;
-                    default:           out += "           "; break;
-                    }
+                    out += "   ";
 
                     // attributes on static data-members
                     out += ConstructAttributes(decl);
@@ -672,14 +664,38 @@ namespace OdrCop2
                             out += "=" + init;
                     }
                     out += ";\n";
+                    continue;
                 }
-                else if (const auto* method = clang::dyn_cast<clang::CXXMethodDecl>(decl))
+                if (const auto* method = clang::dyn_cast<clang::CXXMethodDecl>(decl))
                 {   // methods
                     if (method->isImplicit())
                         continue;
 
-                    out += ConstructFunctionSignature(method, false);
+                    out += "   " + ConstructFunctionSignature(method, false);
                     out += ";\n";
+                    continue;
+                }
+                if (const auto* nested = clang::dyn_cast<clang::CXXRecordDecl>(decl))
+                {
+                    if (nested->isInjectedClassName())
+                        continue;
+
+                    out += "nested type from CXXRecordDecl: ";
+                    out += decl->getDeclKindName();
+                    out += " ";
+                    if (const auto* named = clang::dyn_cast<clang::NamedDecl>(decl))
+                        out += named->getNameAsString();
+                    out += "\n";
+                    continue;
+                }
+
+                { // unhandled
+                    //out += "unhandled clang::Decl ";
+                    //out += decl->getDeclKindName();
+                    //out += " ";
+                    //if (const auto* named = clang::dyn_cast<clang::NamedDecl>(decl))
+                    //    out += named->getNameAsString();
+                    //out += "\n";
                 }
             }
 

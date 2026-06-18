@@ -238,15 +238,16 @@ Test ExploringOdrViolationReportingTests[] =
             std::ostringstream oss;
             int violations = OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.udtMap, oss);
             Assert::AreEqual(1, violations, "should have been one ODR violation");
-            Assert::AreEqual("\nODR VIOLATION: S\n"
-                             "[tu1.cpp]\n"
-                             "struct S { // sizeof=4\n"
-                             "public:    int x;\n"
-                             "};\n"
-                             "[tu2.cpp]\n"
-                             "struct S { // sizeof=4\n"
-                             "public:    long x;\n"
-                             "};\n", oss.str(), "should have been one ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: S\n"
+                            "[tu1.cpp]\n"
+                            "struct S { // sizeof=4\n"
+                            "   int x;\n"
+                            "};\n"
+                            "[tu2.cpp]\n"
+                            "struct S { // sizeof=4\n"
+                            "   long x;\n"
+                            "};\n", oss.str(), "should have been one ODR violation");
         }
     },
 };

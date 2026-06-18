@@ -37,11 +37,11 @@ Test ComprehensiveTests[] =
                              "ODR VIOLATION: DifferentMemberType\n"
                              "[tu3.cpp]\n"
                              "struct DifferentMemberType { // sizeof=4\n"
-                             "public:    int value;\n"
+                             "   int value;\n"
                              "};\n"
                              "[tu4.cpp]\n"
                              "struct DifferentMemberType { // sizeof=4\n"
-                             "public:    long value;\n"
+                             "   long value;\n"
                              "};\n", output);
         }
     },
@@ -55,13 +55,13 @@ Test ComprehensiveTests[] =
                             "ODR VIOLATION: DifferentMemberOrder\n"
                             "[tu3.cpp]\n"
                             "struct DifferentMemberOrder { // sizeof=16\n"
-                            "public:    int first;\n"
-                            "public:    double second;\n"
+                            "   int first;\n"
+                            "   double second;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct DifferentMemberOrder { // sizeof=16\n"
-                            "public:    double second;\n"
-                            "public:    int first;\n"
+                            "   double second;\n"
+                            "   int first;\n"
                             "};\n", output);
         }
     },
@@ -75,12 +75,12 @@ Test ComprehensiveTests[] =
                             "ODR VIOLATION: DifferentMemberCount\n"
                             "[tu3.cpp]\n"
                             "struct DifferentMemberCount { // sizeof=4\n"
-                            "public:    int only;\n"
+                            "   int only;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct DifferentMemberCount { // sizeof=8\n"
-                            "public:    int only;\n"
-                            "public:    int extra;\n"
+                            "   int only;\n"
+                            "   int extra;\n"
                             "};\n", output);
         }
     },
@@ -137,13 +137,13 @@ Test ComprehensiveTests[] =
                             "ODR VIOLATION: DifferentUnionMember\n"
                             "[tu3.cpp]\n"
                             "union DifferentUnionMember { // sizeof=4\n"
-                            "public:    int i;\n"
-                            "public:    float f;\n"
+                            "   int i;\n"
+                            "   float f;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "union DifferentUnionMember { // sizeof=8\n"
-                            "public:    int i;\n"
-                            "public:    double f;\n"
+                            "   int i;\n"
+                            "   double f;\n"
                             "};\n", output);
         }
     },
@@ -162,13 +162,14 @@ Test ComprehensiveTests[] =
                             "ODR VIOLATION: StructVsClassDefaultAccess\n"
                             "[tu3.cpp]\n"
                             "struct StructVsClassDefaultAccess { // sizeof=4\n"
-                            "public:    int value;\n"
+                            "   int value;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "class StructVsClassDefaultAccess { // sizeof=4\n"
-                            "private:   int value;\n"
-                            "public:    void __cdecl StructVsClassDefaultAccess();\n"
-                            "public:    int __cdecl get() const;\n"
+                            "   int value;\n"
+                            "public:\n"
+                            "   void __cdecl StructVsClassDefaultAccess();\n"
+                            "   int __cdecl get() const;\n"
                             "};\n", output);
         }
     },
@@ -199,17 +200,22 @@ Test ComprehensiveTests[] =
                             "ODR VIOLATION: DifferentMemberAccess\n"
                             "[tu3.cpp]\n"
                             "class DifferentMemberAccess { // sizeof=8\n"
-                            "public:    int publicValue;\n"
-                            "private:   int privateValue;\n"
-                            "public:    void __cdecl DifferentMemberAccess();\n"
-                            "public:    int __cdecl getPrivateValue() const;\n"
+                            "public:\n"
+                            "   int publicValue;\n"
+                            "private:\n"
+                            "   int privateValue;\n"
+                            "public:\n"
+                            "   void __cdecl DifferentMemberAccess();\n"
+                            "   int __cdecl getPrivateValue() const;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "class DifferentMemberAccess { // sizeof=8\n"
-                            "private:   int publicValue;\n"
-                            "public:    int privateValue;\n"
-                            "public:    void __cdecl DifferentMemberAccess();\n"
-                            "public:    int __cdecl getPublicValue() const;\n"
+                            "private:\n"
+                            "   int publicValue;\n"
+                            "public:\n"
+                            "   int privateValue;\n"
+                            "   void __cdecl DifferentMemberAccess();\n"
+                            "   int __cdecl getPublicValue() const;\n"
                             "};\n", output);
         }
     },
@@ -234,11 +240,11 @@ Test ComprehensiveTests[] =
                             "ODR VIOLATION: DifferentBaseClass\n"
                             "[tu3.cpp]\n"
                             "struct DifferentBaseClass : public BaseAForDifferentBase { // sizeof=8\n"
-                            "public:    int own;\n"
+                            "   int own;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct DifferentBaseClass : public BaseBForDifferentBase { // sizeof=8\n"
-                            "public:    int own;\n"
+                            "   int own;\n"
                             "};\n", output);
         }
     },
@@ -255,11 +261,11 @@ Test ComprehensiveTests[] =
                             "ODR VIOLATION: DifferentBaseOrder\n"
                             "[tu3.cpp]\n"
                             "struct DifferentBaseOrder : public BaseAForBaseOrder, public BaseBForBaseOrder { // sizeof=12\n"
-                            "public:    int own;\n"
+                            "   int own;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct DifferentBaseOrder : public BaseBForBaseOrder, public BaseAForBaseOrder { // sizeof=12\n"
-                            "public:    int own;\n"
+                            "   int own;\n"
                             "};\n", output);
         }
     },
@@ -272,11 +278,11 @@ Test ComprehensiveTests[] =
                             "ODR VIOLATION: DifferentVirtualBase\n"
                             "[tu3.cpp]\n"
                             "struct DifferentVirtualBase : public BaseForVirtualBase { // sizeof=8\n"
-                            "public:    int own;\n"
+                            "   int own;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct DifferentVirtualBase : public virtual BaseForVirtualBase { // sizeof=24\n"
-                            "public:    int own;\n"
+                            "   int own;\n"
                             "};\n", output);
         }
     },
@@ -289,14 +295,14 @@ Test ComprehensiveTests[] =
                             "ODR VIOLATION: DifferentVirtualShape\n"
                             "[tu3.cpp]\n"
                             "struct DifferentVirtualShape { // sizeof=16\n"
-                            "public:    virtual int __cdecl first();\n"
-                            "public:    int data;\n"
+                            "   virtual int __cdecl first();\n"
+                            "   int data;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct DifferentVirtualShape { // sizeof=16\n"
-                            "public:    virtual int __cdecl first();\n"
-                            "public:    virtual int __cdecl second();\n"
-                            "public:    int data;\n"
+                            "   virtual int __cdecl first();\n"
+                            "   virtual int __cdecl second();\n"
+                            "   int data;\n"
                             "};\n", output);
         }
     },
@@ -309,13 +315,13 @@ Test ComprehensiveTests[] =
                             "ODR VIOLATION: DifferentVirtualFunctionName\n"
                             "[tu3.cpp]\n"
                             "struct DifferentVirtualFunctionName { // sizeof=16\n"
-                            "public:    virtual int __cdecl alpha();\n"
-                            "public:    int data;\n"
+                            "   virtual int __cdecl alpha();\n"
+                            "   int data;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct DifferentVirtualFunctionName { // sizeof=16\n"
-                            "public:    virtual int __cdecl beta();\n"
-                            "public:    int data;\n"
+                            "   virtual int __cdecl beta();\n"
+                            "   int data;\n"
                             "};\n", output);
         }
     },
@@ -328,13 +334,13 @@ Test ComprehensiveTests[] =
                             "ODR VIOLATION: DifferentMethodVirtualness\n"
                             "[tu3.cpp]\n"
                             "struct DifferentMethodVirtualness { // sizeof=16\n"
-                            "public:    virtual int __cdecl value();\n"
-                            "public:    int data;\n"
+                            "   virtual int __cdecl value();\n"
+                            "   int data;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct DifferentMethodVirtualness { // sizeof=4\n"
-                            "public:    int __cdecl value();\n"
-                            "public:    int data;\n"
+                            "   int __cdecl value();\n"
+                            "   int data;\n"
                             "};\n", output);
         }
     },
@@ -347,13 +353,13 @@ Test ComprehensiveTests[] =
                             "ODR VIOLATION: DifferentMethodConstness\n"
                             "[tu3.cpp]\n"
                             "struct DifferentMethodConstness { // sizeof=4\n"
-                            "public:    int __cdecl value() const;\n"
-                            "public:    int data;\n"
+                            "   int __cdecl value() const;\n"
+                            "   int data;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct DifferentMethodConstness { // sizeof=4\n"
-                            "public:    int __cdecl value();\n"
-                            "public:    int data;\n"
+                            "   int __cdecl value();\n"
+                            "   int data;\n"
                             "};\n", output);
         }
     },
@@ -376,20 +382,20 @@ Test ComprehensiveTests[] =
             Assert::AreEqual("\n"
                             "ODR VIOLATION: ?value@DifferentMethodNoexcept@@QEAAHXZ\n"
                             "[tu3.cpp]\n"
-                            "public:    int __cdecl DifferentMethodNoexcept::value() noexcept\n"
+                            "int __cdecl DifferentMethodNoexcept::value() noexcept\n"
                             "[tu4.cpp]\n"
-                            "public:    int __cdecl DifferentMethodNoexcept::value()\n"
+                            "int __cdecl DifferentMethodNoexcept::value()\n"
                             "\n"
                             "ODR VIOLATION: DifferentMethodNoexcept\n"
                             "[tu3.cpp]\n"
                             "struct DifferentMethodNoexcept { // sizeof=4\n"
-                            "public:    int __cdecl value() noexcept;\n"
-                            "public:    int data;\n"
+                            "   int __cdecl value() noexcept;\n"
+                            "   int data;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct DifferentMethodNoexcept { // sizeof=4\n"
-                            "public:    int __cdecl value();\n"
-                            "public:    int data;\n"
+                            "   int __cdecl value();\n"
+                            "   int data;\n"
                             "};\n", output);
         }
     },
@@ -401,20 +407,20 @@ Test ComprehensiveTests[] =
             Assert::AreEqual("\n"
                             "ODR VIOLATION: ?value@DifferentMethodAttributes@@QEAAHXZ\n"
                             "[tu3.cpp]\n"
-                            "public:    int __cdecl DifferentMethodAttributes::value()\n"
+                            "int __cdecl DifferentMethodAttributes::value()\n"
                             "[tu4.cpp]\n"
-                            "public:    [[nodiscard]] int __cdecl DifferentMethodAttributes::value()\n"
+                            "[[nodiscard]] int __cdecl DifferentMethodAttributes::value()\n"
                             "\n"
                             "ODR VIOLATION: DifferentMethodAttributes\n"
                             "[tu3.cpp]\n"
                             "struct DifferentMethodAttributes { // sizeof=4\n"
-                            "public:    int __cdecl value();\n"
-                            "public:    int data;\n"
+                            "   int __cdecl value();\n"
+                            "   int data;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct DifferentMethodAttributes { // sizeof=4\n"
-                            "public:    [[nodiscard]] int __cdecl value();\n"
-                            "public:    int data;\n"
+                            "   [[nodiscard]] int __cdecl value();\n"
+                            "   int data;\n"
                             "};\n", output);
         }
     },
@@ -427,15 +433,88 @@ Test ComprehensiveTests[] =
                             "ODR VIOLATION: DifferentStaticDataMember\n"
                             "[tu3.cpp]\n"
                             "struct DifferentStaticDataMember { // sizeof=4\n"
-                            "public:    static const int value=21;\n"
-                            "public:    int payload;\n"
+                            "   static const int value=21;\n"
+                            "   int payload;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct DifferentStaticDataMember { // sizeof=4\n"
-                            "public:    static const long value=21L;\n"
-                            "public:    int payload;\n"
+                            "   static const long value=21L;\n"
+                            "   int payload;\n"
                             "};\n", output);
         }
     },
-
+    {"TU34-022: Same external-linkage class name, static member function return type differs. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentStaticMemberFunction { static int  value() { return 22;  } int payload; };"
+                                                    ,   "struct DifferentStaticMemberFunction { static long value() { return 22L; } int payload; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentStaticMemberFunction\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentStaticMemberFunction { // sizeof=4\n"
+                            "   static int __cdecl value();\n"
+                            "   int payload;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentStaticMemberFunction { // sizeof=4\n"
+                            "   static long __cdecl value();\n"
+                            "   int payload;\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-023: Same external-linkage struct name, bitfield width differs. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentBitfieldWidth { unsigned int a : 3; unsigned int b : 5; };"
+                                                    ,   "struct DifferentBitfieldWidth { unsigned int a : 4; unsigned int b : 4; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentBitfieldWidth\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentBitfieldWidth { // sizeof=4\n"
+                            "   unsigned int a : 3;\n"
+                            "   unsigned int b : 5;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentBitfieldWidth { // sizeof=4\n"
+                            "   unsigned int a : 4;\n"
+                            "   unsigned int b : 4;\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-024: Same external-linkage struct name, bitfield signedness differs. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentBitfieldSignedness {   signed int a : 4; };"
+                                                    ,   "struct DifferentBitfieldSignedness { unsigned int a : 4; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentBitfieldSignedness\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentBitfieldSignedness { // sizeof=4\n"
+                            "   int a : 4;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentBitfieldSignedness { // sizeof=4\n"
+                            "   unsigned int a : 4;\n"
+                            "};\n", output);
+        }
+    },
+    //{"TU34-025: Same external-linkage struct name, anonymous union member type differs. Expected ODR violation: YES.", []
+    //    {
+    //        const auto& [violations, output] = RunTest( "struct DifferentAnonymousUnionMember { int tag; union { int i; float  f; }; };"
+    //                                                ,   "struct DifferentAnonymousUnionMember { int tag; union { int i; double f; }; };");
+    //        Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+    //        Assert::AreEqual("\n"
+    //                        "ODR VIOLATION: DifferentAnonymousUnionMember\n"
+    //                        "[tu3.cpp]\n"
+    //                        "struct DifferentAnonymousUnionMember { // sizeof=8\n"
+    //                        "   int tag;\n"
+    //                        "   DifferentAnonymousUnionMember::(anonymous union at tu3.cpp:1:49);\n"
+    //                        "};\n"
+    //                        "[tu4.cpp]\n"
+    //                        "struct DifferentAnonymousUnionMember { // sizeof=16\n"
+    //                        "   int tag;\n"
+    //                        "   DifferentAnonymousUnionMember::(anonymous union at tu4.cpp:1:49);\n"
+    //                        "};\n", output);
+    //    }
+    //},
 };
