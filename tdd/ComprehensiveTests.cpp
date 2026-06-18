@@ -523,4 +523,127 @@ Test ComprehensiveTests[] =
                             "};\n", output);
         }
     },
+    {"TU34-026: Same external-linkage struct name, anonymous struct member order differs. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentAnonymousStructOrder { int tag; struct { int x; double y; }; };"
+                                                    ,   "struct DifferentAnonymousStructOrder { int tag; struct { double y; int x; }; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentAnonymousStructOrder\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentAnonymousStructOrder { // sizeof=24\n"
+                            "   int tag;\n"
+                            "   struct  { // sizeof=16\n"
+                            "      int x;\n"
+                            "      double y;\n"
+                            "   };\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentAnonymousStructOrder { // sizeof=24\n"
+                            "   int tag;\n"
+                            "   struct  { // sizeof=16\n"
+                            "      double y;\n"
+                            "      int x;\n"
+                            "   };\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-027: Same external-linkage struct name, identical anonymous union. Expected ODR violation: NO.", []
+        {
+            const auto& [violations, output] = RunTest( "struct IdenticalAnonymousUnion { int tag; union { int i; float f; }; };"
+                                                    ,   "struct IdenticalAnonymousUnion { int tag; union { int i; float f; }; };");
+            Assert::AreEqual(0, violations, "there should be no ODR violation");
+            Assert::AreEqual("", output);
+        }
+    },
+    {"TU34-028: Same external-linkage struct name, typedef target differs. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentTypedefTarget { typedef int  Alias; Alias value; };"
+                                                    ,   "struct DifferentTypedefTarget { typedef long Alias; Alias value; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentTypedefTarget::Alias\n"
+                            "[tu3.cpp]\n"
+                            "DifferentTypedefTarget::Alias = int\n"
+                            "[tu4.cpp]\n"
+                            "DifferentTypedefTarget::Alias = long\n"
+                           , output);
+        }
+    },
+    {"TU34-029: Same external-linkage struct name, using-alias target differs. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentUsingAliasTarget { using Alias = int ; Alias value; };"
+                                                    ,   "struct DifferentUsingAliasTarget { using Alias = long; Alias value; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentUsingAliasTarget::Alias\n"
+                            "[tu3.cpp]\n"
+                            "DifferentUsingAliasTarget::Alias = int\n"
+                            "[tu4.cpp]\n"
+                            "DifferentUsingAliasTarget::Alias = long\n"
+                           , output);
+        }
+    },
+    {"TU34-030: Same external-linkage class template specialization, identical definition. Expected ODR violation: NO.", []
+        {
+            const auto& [violations, output] = RunTest( "template<typename T> struct IdenticalTemplate { T value; };"
+                                                    ,   "template<typename T> struct IdenticalTemplate { T value; };");
+            Assert::AreEqual(0, violations, "there should be no ODR violation");
+            Assert::AreEqual("", output);
+        }
+    },
+    {"TU34-031: Same external-linkage class template specialization, different member type. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "template<typename T> struct DifferentTemplateDefinition { T value; int  extra; };"
+                                                    ,   "template<typename T> struct DifferentTemplateDefinition { T value; long extra; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentTemplateDefinition<>\n"
+                            "[tu3.cpp]\n"
+                            "template<typename T> struct DifferentTemplateDefinition {\n"
+                            "   T value;\n"
+                            "   int extra;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "template<typename T> struct DifferentTemplateDefinition {\n"
+                            "   T value;\n"
+                            "   long extra;\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-032: Same external-linkage template with non-type argument, definition differs. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "template<int N> struct DifferentNonTypeTemplateDefinition { int  values[N]; };"
+                                                    ,   "template<int N> struct DifferentNonTypeTemplateDefinition { long values[N]; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentNonTypeTemplateDefinition<>\n"
+                            "[tu3.cpp]\n"
+                            "template<int N> struct DifferentNonTypeTemplateDefinition {\n"
+                            "   int values[N];\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "template<int N> struct DifferentNonTypeTemplateDefinition {\n"
+                            "   long values[N];\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-033: Same external-linkage inline function name and signature, identical body. Expected ODR violation: NO.", []
+        {
+            const auto& [violations, output] = RunTest( "inline int IdenticalInlineFunction(int x) { return x + 33; }"
+                                                    ,   "inline int IdenticalInlineFunction(int x) { return x + 33; }");
+            Assert::AreEqual(0, violations, "there should be 0 ODR violation");
+            Assert::AreEqual("", output);
+        }
+    },
+    //{"TU34-034: Same external-linkage inline function name and signature, different body. Expected ODR violation: YES.", []
+    //    {
+    //        const auto& [violations, output] = RunTest( "inline int DifferentInlineFunctionBody(int x) { return x + 34; }"
+    //                                                ,   "inline int DifferentInlineFunctionBody(int x) { return x + 340; }");
+    //        Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+    //        Assert::AreEqual("\n"
+    //                        "not implemented yet"
+    //                        "};\n", output);
+    //    }
+    //},
 };
