@@ -635,6 +635,44 @@ namespace OdrCop2
 
                     out += ";\n";
                 }
+                else if (const auto* var = clang::dyn_cast<clang::VarDecl>(decl))
+                {   // static data members  (VarDecl inside a record == static member)
+                    switch (var->getAccess())
+                    {
+                    case AS_public:    out += "public:    "; break;
+                    case AS_protected: out += "protected: "; break;
+                    case AS_private:   out += "private:   "; break;
+                    default:           out += "           "; break;
+                    }
+
+                    // attributes on static data-members
+                    out += ConstructAttributes(decl);
+
+                    if (var->isConstexpr())
+                        out += "constexpr ";
+                    else if (var->isInline())
+                        out += "inline ";
+
+                    { // static field: use same type+name print trick as non-static
+                        std::string fieldStr;
+                        llvm::raw_string_ostream os(fieldStr);
+                        var->getType().print(os, printPolicy, var->getNameAsString());
+                        os.flush();
+                        out += "static " + fieldStr;
+                    }
+
+                    if (var->hasInit())
+                    {
+                        const Expr* expr = var->getInit();
+                        llvm::StringRef  text = clang::Lexer::getSourceText(CharSourceRange::getTokenRange(expr->getSourceRange()), context->getSourceManager(), context->getLangOpts());
+                        std::string      init = text.str();
+                        if ((init.starts_with("{")) || init.starts_with("("))
+                            out += init;
+                        else
+                            out += "=" + init;
+                    }
+                    out += ";\n";
+                }
                 else if (const auto* method = clang::dyn_cast<clang::CXXMethodDecl>(decl))
                 {   // methods
                     if (method->isImplicit())
@@ -747,10 +785,10 @@ namespace OdrCop2
     {
         template<typename Out> static int ReportOdrViolations(const AllMaps& maps, Out&& out)
         {
-            return OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.    enumMap, std::cout)
-                 + OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.functionMap, std::cout)
-                 + OdrCop2::OdrViolationReporter::ReportOdrViolations(maps. typedefMap, std::cout)
-                 + OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.     udtMap, std::cout);
+            return OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.    enumMap, out)
+                 + OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.functionMap, out)
+                 + OdrCop2::OdrViolationReporter::ReportOdrViolations(maps. typedefMap, out)
+                 + OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.     udtMap, out);
         }
 
         template<typename T, typename Out> static int ReportOdrViolations(const std::map<std::string,T>& map, Out&& out)

@@ -6,34 +6,436 @@ using namespace TDD20;
 
 #include "..\src\ASTVisitor.h"
 
+std::pair<int,std::string> RunTest(const std::string& code1, const std::string& code2)
+{
+    OdrCop2::AllMaps maps;
+    Assert::IsTrue(clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++" }, "tu3.cpp"));
+    Assert::IsTrue(clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++" }, "tu4.cpp"));
+
+    std::ostringstream oss;
+    int violations = OdrCop2::OdrViolationReporter::ReportOdrViolations(maps, oss);
+    return {violations, oss.str()};
+}
+
 Test ComprehensiveTests[] =
 {
     {"TU34-001: Identical external-linkage struct definitions. Expected ODR violation: NO.", []
         {
-            std::string code1 = "namespace OdrCopTU34Tests {"
-                                "    struct IdenticalStruct {"
-                                "        int a;"
-                                "        double b;"
-                                "    };"
-                                "    IdenticalStruct g_3_001{1, 2.0};"
-                                "}";
-
-            std::string code2 = "namespace OdrCopTU34Tests {"
-                                "   struct IdenticalStruct {"
-                                "       int a;"
-                                "       double b;"
-                                "   };"
-                                "   IdenticalStruct g_4_001{1, 2.0};"
-                                "}";
-
-            OdrCop2::AllMaps maps;
-            Assert::IsTrue(clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++" }));
-            Assert::IsTrue(clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++" }));
-
-            std::string out;
-            std::ostringstream oss(out);
-            Assert::AreEqual(0, OdrCop2::OdrViolationReporter::ReportOdrViolations(maps, oss), "there should be no ODR violations");
-            Assert::AreEqual("", out, "there should be no output");
+            const auto& [violations, output] = RunTest( "namespace OdrCopTU34Tests { struct IdenticalStruct { int a; double b; }; }",
+                                                        "namespace OdrCopTU34Tests { struct IdenticalStruct { int a; double b; }; }");
+            Assert::AreEqual(0, violations, "there should be no ODR violations");
+            Assert::AreEqual("", output, "there should be no output");
         }
     },
+    {"TU34-002: Same external-linkage struct name, different member type. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentMemberType { int value; };"
+                                                      , "struct DifferentMemberType { long value; };");
+
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                             "ODR VIOLATION: DifferentMemberType\n"
+                             "[tu3.cpp]\n"
+                             "struct DifferentMemberType { // sizeof=4\n"
+                             "public:    int value;\n"
+                             "};\n"
+                             "[tu4.cpp]\n"
+                             "struct DifferentMemberType { // sizeof=4\n"
+                             "public:    long value;\n"
+                             "};\n", output);
+        }
+    },
+    {"TU34-003: Same external-linkage struct name, same members in a different order. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentMemberOrder { int first; double second; };"
+                                                    ,   "struct DifferentMemberOrder { double second; int first; };");
+
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentMemberOrder\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentMemberOrder { // sizeof=16\n"
+                            "public:    int first;\n"
+                            "public:    double second;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentMemberOrder { // sizeof=16\n"
+                            "public:    double second;\n"
+                            "public:    int first;\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-004: Same external-linkage struct name, different member count. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentMemberCount { int only; };"
+                                                    ,   "struct DifferentMemberCount { int only; int extra; };");
+
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentMemberCount\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentMemberCount { // sizeof=4\n"
+                            "public:    int only;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentMemberCount { // sizeof=8\n"
+                            "public:    int only;\n"
+                            "public:    int extra;\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-005: Same external-linkage enum name, identical enumerators and values. Expected ODR violation: NO.", []
+        {
+            const auto& [violations, output] = RunTest( "enum class IdenticalScopedEnum : int { zero = 0, one = 1 };"
+                                                    ,   "enum class IdenticalScopedEnum : int { zero = 0, one = 1 };");
+
+            Assert::AreEqual(0, violations, "there should be no ODR violation");
+            Assert::AreEqual("", output);
+        }
+    },
+    {"TU34-006: Same external-linkage enum name, different enumerator values. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "enum class DifferentEnumeratorValues : int { zero = 0, one = 1 };"
+                                                    ,   "enum class DifferentEnumeratorValues : int { zero = 0, one = 2 };");
+
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentEnumeratorValues\n"
+                            "[tu3.cpp]\n"
+                            "enum class DifferentEnumeratorValues : int { zero=0, one=1 };\n"
+                            "[tu4.cpp]\n"
+                            "enum class DifferentEnumeratorValues : int { zero=0, one=2 };\n", output);
+        }
+    },
+    {"TU34-007: Same external-linkage enum name, different underlying type. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "enum class DifferentEnumUnderlyingType :          int { value = 1  };"
+                                                    ,   "enum class DifferentEnumUnderlyingType : unsigned int { value = 1U };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentEnumUnderlyingType\n"
+                            "[tu3.cpp]\n"
+                            "enum class DifferentEnumUnderlyingType : int { value=1 };\n"
+                            "[tu4.cpp]\n"
+                            "enum class DifferentEnumUnderlyingType : unsigned int { value=1 };\n", output);
+        }
+    },
+    {"TU34-008: Same external-linkage union name, identical members. Expected ODR violation: NO.", []
+        {
+            const auto& [violations, output] = RunTest( "union IdenticalUnion { int i; float f; };"
+                                                    ,   "union IdenticalUnion { int i; float f; };");
+            Assert::AreEqual(0, violations, "there should be no ODR violation");
+            Assert::AreEqual("", output);
+        }
+    },
+    {"TU34-009: Same external-linkage union name, different member type. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "union DifferentUnionMember { int i;  float f; };"
+                                                    ,   "union DifferentUnionMember { int i; double f; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentUnionMember\n"
+                            "[tu3.cpp]\n"
+                            "union DifferentUnionMember { // sizeof=4\n"
+                            "public:    int i;\n"
+                            "public:    float f;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "union DifferentUnionMember { // sizeof=8\n"
+                            "public:    int i;\n"
+                            "public:    double f;\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-010: Same external-linkage class name, struct vs class default access differs. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest("struct StructVsClassDefaultAccess { int value; };"
+                                                    ,   "class StructVsClassDefaultAccess"
+                                                        "{"
+                                                        "    int value;"
+                                                        "public:"
+                                                        "    StructVsClassDefaultAccess() : value(10) {}"
+                                                        "    int get() const { return value; }"
+                                                        "};");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: StructVsClassDefaultAccess\n"
+                            "[tu3.cpp]\n"
+                            "struct StructVsClassDefaultAccess { // sizeof=4\n"
+                            "public:    int value;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "class StructVsClassDefaultAccess { // sizeof=4\n"
+                            "private:   int value;\n"
+                            "public:    void __cdecl StructVsClassDefaultAccess();\n"
+                            "public:    int __cdecl get() const;\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-011: Same external-linkage class name, explicit member access differs. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "class DifferentMemberAccess"
+                                                        "{"
+                                                        "public:"
+                                                        "    int publicValue;"
+                                                        "private:"
+                                                        "    int privateValue;"
+                                                        "public:"
+                                                        "    DifferentMemberAccess() : publicValue(11), privateValue(12) {}"
+                                                        "    int getPrivateValue() const { return privateValue; }"
+                                                        "};"
+                                                    ,   "class DifferentMemberAccess"
+                                                        "{"
+                                                        "private:"
+                                                        "    int publicValue;"
+                                                        "public:"
+                                                        "    int privateValue;"
+                                                        "    DifferentMemberAccess() : publicValue(11), privateValue(12) {}"
+                                                        "    int getPublicValue() const { return publicValue; }"
+                                                        "};");
+
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentMemberAccess\n"
+                            "[tu3.cpp]\n"
+                            "class DifferentMemberAccess { // sizeof=8\n"
+                            "public:    int publicValue;\n"
+                            "private:   int privateValue;\n"
+                            "public:    void __cdecl DifferentMemberAccess();\n"
+                            "public:    int __cdecl getPrivateValue() const;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "class DifferentMemberAccess { // sizeof=8\n"
+                            "private:   int publicValue;\n"
+                            "public:    int privateValue;\n"
+                            "public:    void __cdecl DifferentMemberAccess();\n"
+                            "public:    int __cdecl getPublicValue() const;\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-012: Same external-linkage class name, identical access and members. Expected ODR violation: NO.", []
+        {
+            const auto& [violations, output] = RunTest( "class IdenticalClass { public: int value; IdenticalClass() : value(12) {} };"
+                                                    ,   "class IdenticalClass { public: int value; IdenticalClass() : value(12) {} };");
+            Assert::AreEqual(0, violations, "there should be no ODR violation");
+            Assert::AreEqual("", output);
+        }
+    },
+    {"TU34-013: Same derived class name, different direct base class. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct BaseAForDifferentBase { int a; };"
+                                                        "struct BaseBForDifferentBase { int b; };"
+                                                        "struct DifferentBaseClass : BaseAForDifferentBase { int own; };"
+                                                    ,   "struct BaseAForDifferentBase { int a; };"
+                                                        "struct BaseBForDifferentBase { int b; };"
+                                                        "struct DifferentBaseClass : BaseBForDifferentBase { int own; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentBaseClass\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentBaseClass : public BaseAForDifferentBase { // sizeof=8\n"
+                            "public:    int own;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentBaseClass : public BaseBForDifferentBase { // sizeof=8\n"
+                            "public:    int own;\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-014: Same derived class name, same bases but in a different order. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct BaseAForBaseOrder { int a; };"
+                                                        "struct BaseBForBaseOrder { int b; };"
+                                                        "struct DifferentBaseOrder : BaseAForBaseOrder, BaseBForBaseOrder { int own; };"
+                                                    ,   "struct BaseAForBaseOrder { int a; };"
+                                                        "struct BaseBForBaseOrder { int b; };"
+                                                        "struct DifferentBaseOrder : BaseBForBaseOrder, BaseAForBaseOrder { int own; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentBaseOrder\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentBaseOrder : public BaseAForBaseOrder, public BaseBForBaseOrder { // sizeof=12\n"
+                            "public:    int own;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentBaseOrder : public BaseBForBaseOrder, public BaseAForBaseOrder { // sizeof=12\n"
+                            "public:    int own;\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-015: Same derived class name, non-virtual base vs virtual base. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct BaseForVirtualBase { int base; }; struct DifferentVirtualBase :         BaseForVirtualBase { int own; };"
+                                                    ,   "struct BaseForVirtualBase { int base; }; struct DifferentVirtualBase : virtual BaseForVirtualBase { int own; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentVirtualBase\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentVirtualBase : public BaseForVirtualBase { // sizeof=8\n"
+                            "public:    int own;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentVirtualBase : public virtual BaseForVirtualBase { // sizeof=24\n"
+                            "public:    int own;\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-016: Same external-linkage class name, different virtual function table shape. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentVirtualShape { virtual int first() { return 16; }                                      int data; };"
+                                                    ,   "struct DifferentVirtualShape { virtual int first() { return 16; } virtual int second() { return 160; } int data; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentVirtualShape\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentVirtualShape { // sizeof=16\n"
+                            "public:    virtual int __cdecl first();\n"
+                            "public:    int data;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentVirtualShape { // sizeof=16\n"
+                            "public:    virtual int __cdecl first();\n"
+                            "public:    virtual int __cdecl second();\n"
+                            "public:    int data;\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-017: Same external-linkage class name, virtual function name differs. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentVirtualFunctionName { virtual int alpha() { return 17; } int data; };"
+                                                    ,   "struct DifferentVirtualFunctionName { virtual int beta () { return 17; } int data; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentVirtualFunctionName\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentVirtualFunctionName { // sizeof=16\n"
+                            "public:    virtual int __cdecl alpha();\n"
+                            "public:    int data;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentVirtualFunctionName { // sizeof=16\n"
+                            "public:    virtual int __cdecl beta();\n"
+                            "public:    int data;\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-018: Same external-linkage class name, virtualness of a method differs. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentMethodVirtualness { virtual int value() { return 18; } int data; };"
+                                                    ,   "struct DifferentMethodVirtualness {         int value() { return 18; } int data; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentMethodVirtualness\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentMethodVirtualness { // sizeof=16\n"
+                            "public:    virtual int __cdecl value();\n"
+                            "public:    int data;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentMethodVirtualness { // sizeof=4\n"
+                            "public:    int __cdecl value();\n"
+                            "public:    int data;\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-019: Same external-linkage class name, const qualification of a method differs. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentMethodConstness { int value() const { return 19; } int data; };"
+                                                    ,   "struct DifferentMethodConstness { int value()       { return 19; } int data; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentMethodConstness\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentMethodConstness { // sizeof=4\n"
+                            "public:    int __cdecl value() const;\n"
+                            "public:    int data;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentMethodConstness { // sizeof=4\n"
+                            "public:    int __cdecl value();\n"
+                            "public:    int data;\n"
+                            "};\n", output);
+        }
+    },
+    /*
+    Careful readers will note that the number of violations above is 1, but the number of violations below is 2. You probably wonder why that is.
+    A const method is an overload, if there's a non-const method of the same name. And that means that the mangled name must be different.
+    On the other hand, with MSVC, noexcept is *not* part of mangling (but it part of their metadata that they use at runtime to call std::terminate if an except is thrown).
+    For free functions with and without noexcept, this does exactly the right thing, but for methods it's a little odd:  
+        they mangle to the same thing and thus show up as ODR violations.
+    I think this is a good thing. 
+
+    After doing a little TDD, I've uncovered the general rule:  
+    If an attribute doesn't participate in overload resolution, then it doesn't participate in mangling.
+    */
+    {"TU34-020: Same external-linkage class name, noexcept specification differs. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentMethodNoexcept { int value() noexcept { return 20; } int data; };"
+                                                    ,   "struct DifferentMethodNoexcept { int value()          { return 20; } int data; };");
+            Assert::AreEqual(2, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: ?value@DifferentMethodNoexcept@@QEAAHXZ\n"
+                            "[tu3.cpp]\n"
+                            "public:    int __cdecl DifferentMethodNoexcept::value() noexcept\n"
+                            "[tu4.cpp]\n"
+                            "public:    int __cdecl DifferentMethodNoexcept::value()\n"
+                            "\n"
+                            "ODR VIOLATION: DifferentMethodNoexcept\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentMethodNoexcept { // sizeof=4\n"
+                            "public:    int __cdecl value() noexcept;\n"
+                            "public:    int data;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentMethodNoexcept { // sizeof=4\n"
+                            "public:    int __cdecl value();\n"
+                            "public:    int data;\n"
+                            "};\n", output);
+        }
+    },
+    {"Same external-linkage class name, [[attributes]] differ. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentMethodAttributes {               int value() { return 20; } int data; };"
+                                                    ,   "struct DifferentMethodAttributes { [[nodiscard]] int value() { return 20; } int data; };");
+            Assert::AreEqual(2, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: ?value@DifferentMethodAttributes@@QEAAHXZ\n"
+                            "[tu3.cpp]\n"
+                            "public:    int __cdecl DifferentMethodAttributes::value()\n"
+                            "[tu4.cpp]\n"
+                            "public:    [[nodiscard]] int __cdecl DifferentMethodAttributes::value()\n"
+                            "\n"
+                            "ODR VIOLATION: DifferentMethodAttributes\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentMethodAttributes { // sizeof=4\n"
+                            "public:    int __cdecl value();\n"
+                            "public:    int data;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentMethodAttributes { // sizeof=4\n"
+                            "public:    [[nodiscard]] int __cdecl value();\n"
+                            "public:    int data;\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-021: Same external-linkage class name, static data member type differs. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentStaticDataMember { static const int  value = 21;  int payload; };"
+                                                    ,   "struct DifferentStaticDataMember { static const long value = 21L; int payload; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentStaticDataMember\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentStaticDataMember { // sizeof=4\n"
+                            "public:    static const int value=21;\n"
+                            "public:    int payload;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentStaticDataMember { // sizeof=4\n"
+                            "public:    static const long value=21L;\n"
+                            "public:    int payload;\n"
+                            "};\n", output);
+        }
+    },
+
 };
