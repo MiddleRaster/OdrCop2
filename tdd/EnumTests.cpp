@@ -14,7 +14,7 @@ Test EnumTests[] =
 			std::string code = R"(enum Color { Red, Green, Blue};)";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++", "-std=c++23" });
             Assert::IsTrue(ok);
             const auto& vec = maps.enumMap.begin()->second;
             Assert::AreEqual("enum Color { Red=0, Green=1, Blue=2 };", vec[0].fullyQualified, "should have found enum");
@@ -25,7 +25,7 @@ Test EnumTests[] =
             std::string code = R"(namespace Hi { enum Color { Red, Green, Blue}; })";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++", "-std=c++23" });
             Assert::IsTrue(ok);
             const auto& vec = maps.enumMap.begin()->second;
             Assert::AreEqual("enum Hi::Color { Red=0, Green=1, Blue=2 };", vec[0].fullyQualified, "should have found enum");
@@ -38,9 +38,9 @@ Test EnumTests[] =
             std::string code3 = R"(namespace Hi { enum       Color : int { Red, Green, Blue}; })";
 
             OdrCop2::AllMaps maps;
-            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++" }, "tu1.cpp"));
-            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++" }, "tu2.cpp"));
-            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code3, { "-x", "c++" }, "tu3.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++", "-std=c++23" }, "tu1.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++", "-std=c++23" }, "tu2.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code3, { "-x", "c++", "-std=c++23" }, "tu3.cpp"));
 
             auto& vec = maps.enumMap.begin()->second;
             Assert::AreEqual(3, vec.size(), "should have been 3 enums of the same name");
@@ -60,8 +60,8 @@ Test EnumTests[] =
             std::string code2 = R"(namespace NS { enum { a, b }; })";
     
             OdrCop2::AllMaps maps;
-            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++" }, "tu1.cpp"));
-            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++" }, "tu2.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++", "-std=c++23" }, "tu1.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++", "-std=c++23" }, "tu2.cpp"));
 
             std::ostringstream oss;
             Assert::AreEqual(1, OdrCop2::OdrViolationReporter::ReportOdrViolations(maps, oss), "there should be no ODR violation");
@@ -80,8 +80,8 @@ Test EnumTests[] =
             std::string code2 = "namespace { enum { A = 1, B }; } struct S { int x = A; };";
     
             OdrCop2::AllMaps maps;
-            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++" }, "tu1.cpp"));
-            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++" }, "tu2.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++", "-std=c++23" }, "tu1.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++", "-std=c++23" }, "tu2.cpp"));
 
             std::ostringstream oss;
             Assert::AreEqual(1, OdrCop2::OdrViolationReporter::ReportOdrViolations(maps, oss), "there should be 1 ODR violation");
@@ -103,8 +103,8 @@ Test EnumTests[] =
             std::string code2 = "namespace { enum { A = 1, B }; } struct S { auto Foo() { return A; } };";
 
             OdrCop2::AllMaps maps;
-            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++" }, "tu1.cpp"));
-            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++" }, "tu2.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++", "-std=c++23" }, "tu1.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++", "-std=c++23" }, "tu2.cpp"));
 
             std::ostringstream oss;
             Assert::AreEqual(2, OdrCop2::OdrViolationReporter::ReportOdrViolations(maps, oss), "there should be 2 ODR violations");
@@ -132,8 +132,8 @@ Test EnumTests[] =
             std::string code2 = "struct S { enum { A, B } E; void f(decltype(S::E) value) { (void)value; } };";
 
             OdrCop2::AllMaps maps;
-            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++" }, "tu1.cpp"));
-            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++" }, "tu2.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++", "-std=c++23" }, "tu1.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++", "-std=c++23" }, "tu2.cpp"));
 
             std::ostringstream oss;
             Assert::AreEqual(0, OdrCop2::OdrViolationReporter::ReportOdrViolations(maps, oss), "there should be 1 ODR violation");
@@ -146,8 +146,8 @@ Test EnumTests[] =
             std::string code2 = "struct S { enum { A, B } E; void f(decltype(S::E) value) { (void)value; } };";
 
             OdrCop2::AllMaps maps;
-            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++" }, "tu1.cpp"));
-            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++" }, "tu2.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++", "-std=c++23" }, "tu1.cpp"));
+            Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++", "-std=c++23" }, "tu2.cpp"));
 
             std::ostringstream oss;
             Assert::AreEqual(2, OdrCop2::OdrViolationReporter::ReportOdrViolations(maps, oss), "there should be 2 ODR violation");
@@ -184,8 +184,8 @@ Test EnumTests[] =
                                     "void Foo(X<A>&) {}";
 
                 OdrCop2::AllMaps maps;
-                Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++" }, "tu1.cpp"));
-                Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++" }, "tu2.cpp"));
+                Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++", "-std=c++23" }, "tu1.cpp"));
+                Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++", "-std=c++23" }, "tu2.cpp"));
 
                 std::ostringstream oss;
                 Assert::AreEqual(1, OdrCop2::OdrViolationReporter::ReportOdrViolations(maps, oss), "there should be 1 ODR violation");
@@ -205,9 +205,7 @@ Test EnumTests[] =
                                     "    static void staticMethod(){}"
                                     "};"
                                     "namespace { enum { A=1 }; }"
-                                    "template struct X<A>;"
-                                    "template void X<A>::method();"
-                                    "template void X<A>::staticMethod();";
+                                    "template struct X<A>;";
 
                 std::string code2 = "template<int N> struct X {"
                                     "    char ar[N];"
@@ -215,17 +213,15 @@ Test EnumTests[] =
                                     "    static void staticMethod(){}"
                                     "};"
                                     "namespace { enum { A=2,B,C,D,E,F }; }"
-                                    "template struct X<A>;"
-                                    "template void X<A>::method();"
-                                    "template void X<A>::staticMethod();";
+                                    "template struct X<A>;";
 
 
                 OdrCop2::AllMaps maps;
-                Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++" }, "tu1.cpp"));
-                Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++" }, "tu2.cpp"));
+                Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++", "-std=c++23" }, "tu1.cpp"));
+                Assert::AreEqual(true, clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++", "-std=c++23" }, "tu2.cpp"));
 
                 std::ostringstream oss;
-                Assert::AreEqual(0, OdrCop2::OdrViolationReporter::ReportOdrViolations(maps, oss), "there should be n ODR violation");
+                Assert::AreEqual(0, OdrCop2::OdrViolationReporter::ReportOdrViolations(maps, oss), "there should be no ODR violation");
                 Assert::AreEqual("", oss.str());
             }
         }

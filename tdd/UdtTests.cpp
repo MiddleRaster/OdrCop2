@@ -14,7 +14,7 @@ Test UdtTests[] =
             std::string code = R"(struct S { int x; };)";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++", "-std=c++23" });
             Assert::IsTrue(ok);
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
@@ -26,7 +26,7 @@ Test UdtTests[] =
             std::string code = R"(struct S { int x; int foo(){ return x; } };)";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++", "-std=c++23" });
             Assert::IsTrue(ok);
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
@@ -44,7 +44,7 @@ Test UdtTests[] =
                                 "};";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++", "-std=c++23" });
             Assert::IsTrue(ok);
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
@@ -67,7 +67,7 @@ Test UdtTests[] =
                                 "};";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++", "-std=c++23" });
             Assert::IsTrue(ok);
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
@@ -86,7 +86,7 @@ Test UdtTests[] =
                                "};";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++", "-std=c++23" });
             Assert::IsTrue(ok);
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
@@ -104,7 +104,7 @@ Test UdtTests[] =
                                "};";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++", "-std=c++23" });
             Assert::IsTrue(ok);
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
@@ -126,7 +126,7 @@ Test UdtTests[] =
                                "};";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++", "-std=c++23" });
             Assert::IsTrue(ok);
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
@@ -151,7 +151,7 @@ Test UdtTests[] =
                                "};";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++", "-std=c++23" });
             Assert::IsTrue(ok);
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
@@ -173,7 +173,7 @@ Test UdtTests[] =
                                "};";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++", "-std=c++23" });
             Assert::IsTrue(ok);
             Assert::AreEqual(4, maps.udtMap.size(), "number of UDTs found");
             const auto& vec = maps.udtMap.begin()->second;
@@ -188,7 +188,7 @@ Test UdtTests[] =
             std::string code = "class Class final {};";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++", "-std=c++23" });
             Assert::IsTrue(ok);
             Assert::AreEqual(1, maps.udtMap.size(), "number of UDTs found");
             const auto& vec = maps.udtMap.begin()->second;
@@ -205,7 +205,7 @@ Test UdtTests[] =
                                "};";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++", "-std=c++23" });
             Assert::IsTrue(ok);
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
@@ -223,7 +223,7 @@ Test UdtTests[] =
                                "};";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++", "-std=c++23" });
             Assert::IsTrue(ok);
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
@@ -241,7 +241,7 @@ Test UdtTests[] =
                                "};";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++", "-std=c++23" });
             Assert::IsTrue(ok);
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
@@ -259,7 +259,7 @@ Test UdtTests[] =
                                "};";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++", "-std=c++23" });
             Assert::IsTrue(ok);
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
@@ -275,7 +275,7 @@ Test UdtTests[] =
                                "public: Container<int>  contents; };";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++", "-std=c++23" });
             Assert::IsTrue(ok);
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
@@ -293,7 +293,7 @@ Test UdtTests[] =
                                "using Struct = StructT<Empty>;";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++", "-std=c++23" });
             Assert::IsTrue(ok);
             Assert::AreEqual(2, maps.    udtMap.size(), "should see 2 UDTs");
             Assert::AreEqual(1, maps.typedefMap.size(), "should see 1 typedef/alias");
@@ -316,7 +316,7 @@ Test UdtTests[] =
                                "void test() { S<int> s; }";
 
             OdrCop2::AllMaps maps;
-            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++", "-std=c++23" });
             Assert::IsTrue(ok);
 
             Assert::AreEqual(1, maps.functionMap.size(), "should see 1 function");

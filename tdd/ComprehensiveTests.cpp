@@ -9,8 +9,8 @@ using namespace TDD20;
 std::pair<int,std::string> RunTest(const std::string& code1, const std::string& code2)
 {
     OdrCop2::AllMaps maps;
-    Assert::IsTrue(clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++" }, "tu3.cpp"));
-    Assert::IsTrue(clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++" }, "tu4.cpp"));
+    Assert::IsTrue(clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++", "-std=c++23" }, "tu3.cpp"));
+    Assert::IsTrue(clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++", "-std=c++23" }, "tu4.cpp"));
 
     std::ostringstream oss;
     int violations = OdrCop2::OdrViolationReporter::ReportOdrViolations(maps, oss);
@@ -367,11 +367,11 @@ Test ComprehensiveTests[] =
     Careful readers will note that the number of violations above is 1, but the number of violations below is 2. You probably wonder why that is.
     A const method is an overload, if there's a non-const method of the same name. And that means that the mangled name must be different.
     On the other hand, with MSVC, noexcept is *not* part of mangling (but it part of their metadata that they use at runtime to call std::terminate if an except is thrown).
-    For free functions with and without noexcept, this does exactly the right thing, but for methods it's a little odd:  
+    For free functions with and without noexcept, this does exactly the right thing, but for methods it's a little odd:
         they mangle to the same thing and thus show up as ODR violations.
-    I think this is a good thing. 
+    I think this is a good thing.
 
-    After doing a little TDD, I've uncovered the general rule:  
+    After doing a little TDD, I've uncovered the general rule:
     If an attribute doesn't participate in overload resolution, then it doesn't participate in mangling.
     */
     {"TU34-020: Same external-linkage class name, noexcept specification differs. Expected ODR violation: YES.", []
@@ -902,9 +902,9 @@ Test ComprehensiveTests[] =
             Assert::AreEqual("\n"
                             "ODR VIOLATION: ??R<lambda_1>@?0??DifferentLambdaUser@@YAHH@Z@QEBA?A?<auto>@@H@Z\n"
                             "[tu3.cpp]\n"
-                            "inline int __cdecl DifferentLambdaUser(int)::(lambda)::operator()(int) const { return y + 50; }\n"
+                            "inline constexpr int __cdecl DifferentLambdaUser(int)::(lambda)::operator()(int) const { return y + 50; }\n"
                             "[tu4.cpp]\n"
-                            "inline int __cdecl DifferentLambdaUser(int)::(lambda)::operator()(int) const { return y + 500; }\n"
+                            "inline constexpr int __cdecl DifferentLambdaUser(int)::(lambda)::operator()(int) const { return y + 500; }\n"
                             "\n"
                             "ODR VIOLATION: ?DifferentLambdaUser@@YAHH@Z\n"
                             "[tu3.cpp]\n"
@@ -923,4 +923,61 @@ Test ComprehensiveTests[] =
                             "}\n", output);
         }
     },
+};
+
+
+Test ComprehensiveTests2[] = // TU1, TU2 tests
+{
+    {"Same class but different default member initializers", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentDefaultMemberInitializer { int a = 1; };"
+                                                    ,   "struct DifferentDefaultMemberInitializer { int a = 2; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation(s)");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentDefaultMemberInitializer\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentDefaultMemberInitializer { // sizeof=4\n"
+                            "   int a=1;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentDefaultMemberInitializer { // sizeof=4\n"
+                            "   int a=2;\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class but different constexpr values", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentConstexprValue { static constexpr int v = 1; };"
+                                                    ,   "struct DifferentConstexprValue { static constexpr int v = 2; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation(s)");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentConstexprValue\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentConstexprValue { // sizeof=1\n"
+                            "   constexpr static const int v=1;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentConstexprValue { // sizeof=1\n"
+                            "   constexpr static const int v=2;\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class but different constexpr / consteval / constinit. These affect linkage and initialization.", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentConstInit { static constinit int x; };"
+                                                    ,   "struct DifferentConstInit { static           int x; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation(s)");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentConstInit\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentConstInit { // sizeof=1\n"
+                            "   constinit static int x;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentConstInit { // sizeof=1\n"
+                            "   static int x;\n"
+                            "};\n", output);
+        }
+    },
+
 };
