@@ -91,6 +91,9 @@ namespace OdrCop2
             if (context->getSourceManager().isInSystemHeader(recordDecl->getLocation()))
                 return true; // skip anything not in the main file or a user header
 
+            if (recordDecl->isInAnonymousNamespace())
+                return true; // if the class/struc/union has internal-linkage, skip it
+
             if (recordDecl->isThisDeclarationADefinition())
             {
                 std::string key = recordDecl->getQualifiedNameAsString();

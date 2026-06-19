@@ -657,4 +657,22 @@ Test ComprehensiveTests[] =
             Assert::AreEqual("", output);
         }
     },
+    {"TU34-036: Same anonymous-namespace function name, different body. Expected ODR violation: NO.", []
+        {
+            const auto& [violations, output] = RunTest("namespace { int SameAnonymousNamespaceFunctionNameDifferentBody(int x) { return x + 36; } }"
+                                                    ,  "namespace { int SameAnonymousNamespaceFunctionNameDifferentBody(int x) { return x + 360; } }");
+            Assert::AreEqual(0, violations, "there should be no ODR violation");
+            Assert::AreEqual("", output);
+        }
+    },
+    {"TU34-037: Same anonymous-namespace type name at namespace scope, different layout. Expected ODR violation: NO.", []
+        {
+            const auto& [violations, output] = RunTest("namespace { struct SameAnonymousNamespaceTypeNameDifferentLayout { int x; }; }"
+                                                    ,  "namespace { struct SameAnonymousNamespaceTypeNameDifferentLayout { double y; }; }");
+            Assert::AreEqual(0, violations, "there should be no ODR violation");
+            Assert::AreEqual("", output);
+        }
+    },
+
+
 };
