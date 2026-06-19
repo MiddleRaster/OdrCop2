@@ -706,12 +706,28 @@ namespace OdrCop2
                     // attributes on data-members
                     out += ConstructAttributes(decl);
 
-                    { // field: must be done this way to handle array fields as well.
-                        std::string fieldStr;
-                        llvm::raw_string_ostream os(fieldStr);
-                        field->getType().print(os, printPolicy, field->getNameAsString());
-                        os.flush();
-                        out += fieldStr;
+                    { // when a field is defined in an anonymous namespace, include the full definition here with the field.
+                        const clang::Type* type = field->getType().getCanonicalType().getTypePtr();
+                        const auto*  recordType = clang::dyn_cast<clang::RecordType>(type);
+                        if (recordType && recordType->getDecl()->isInAnonymousNamespace())
+                        {
+                            clang::Qualifiers quals = field->getType().getQualifiers();
+                            if (quals.hasConst())    out += "const ";
+                            if (quals.hasVolatile()) out += "volatile ";
+
+                            out += ConstructAttributes(field);
+                            out += EmitAnonymousNamespaceRecord(recordType->getDecl());
+                            out += " ";
+                            out += field->getNameAsString();
+                        }
+                        else
+                        { // field must be done this way to handle array fields as well.
+                            std::string fieldStr;
+                            llvm::raw_string_ostream os(fieldStr);
+                            field->getType().print(os, printPolicy, field->getNameAsString());
+                            os.flush();
+                            out += fieldStr;
+                        }
                     }
 
                     if (field->isBitField())
@@ -810,7 +826,62 @@ namespace OdrCop2
             out += "};";
             return out;
         }
+        std::string EmitAnonymousNamespaceRecord(const clang::RecordDecl* innerDecl)
+        {
+            std::string out;
 
+            out += innerDecl->getKindName().str() + " ";
+            out += innerDecl->getQualifiedNameAsString();
+            out += " { ";
+            for (const clang::FieldDecl* innerField : innerDecl->fields())
+            {
+                const clang::Type* innerType = innerField->getType().getCanonicalType().getTypePtr();
+                const auto*  innerRecordType = clang::dyn_cast<clang::RecordType>(innerType);
+                if (innerRecordType && innerRecordType->getDecl()->isInAnonymousNamespace())
+                {
+                    clang::Qualifiers quals = innerField->getType().getQualifiers();
+                    if (quals.hasConst())    out += "const ";
+                    if (quals.hasVolatile()) out += "volatile ";
+
+                    out += ConstructAttributes(innerField);
+                    out += EmitAnonymousNamespaceRecord(innerRecordType->getDecl());
+                    out += " ";
+                    out += innerField->getNameAsString();
+                }
+                else
+                {
+                    std::string              innerFieldStr;
+                    llvm::raw_string_ostream os(innerFieldStr);
+                    innerField->getType().print(os, printPolicy, innerField->getNameAsString());
+                    os.flush();
+                    out += innerFieldStr;
+                }
+
+                if (innerField->isBitField())
+                {
+                    std::string              bitWidth;
+                    llvm::raw_string_ostream os(bitWidth);
+                    innerField->getBitWidth()->printPretty(os, nullptr, printPolicy);
+                    os.flush();
+                    out += " : " + bitWidth;
+                }
+
+                if (innerField->hasInClassInitializer())
+                {
+                    const Expr* expr = innerField->getInClassInitializer();
+                    llvm::StringRef text = clang::Lexer::getSourceText(CharSourceRange::getTokenRange(expr->getSourceRange()), context->getSourceManager(), context->getLangOpts());
+                    std::string     init = text.str();
+                    if ((init.starts_with("{")) || init.starts_with("("))
+                        out += init;
+                    else
+                        out += "=" + init;
+                }
+
+                out += "; ";
+            }
+            out += "}";
+            return out;
+        }
         std::string ConstructAttribute(const Attr* attr)
         {
             std::string out;

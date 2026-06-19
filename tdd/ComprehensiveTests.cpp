@@ -673,6 +673,25 @@ Test ComprehensiveTests[] =
             Assert::AreEqual("", output);
         }
     },
+    {"TU34-038: Anonymous-namespace type embedded in external-linkage type, different layout. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "namespace { struct InternalPartForExternalCarrier {          int x; }; }"
+                                                        "struct ExternalCarrierOfInternalType { const InternalPartForExternalCarrier part; };"
+                                                    ,   "namespace { struct InternalPartForExternalCarrier { unsigned int y; }; }"
+                                                        "struct ExternalCarrierOfInternalType { const InternalPartForExternalCarrier part; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: ExternalCarrierOfInternalType\n"
+                            "[tu3.cpp]\n"
+                            "struct ExternalCarrierOfInternalType { // sizeof=4\n"
+                            "   const struct (anonymous namespace)::InternalPartForExternalCarrier { int x; } part;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct ExternalCarrierOfInternalType { // sizeof=4\n"
+                            "   const struct (anonymous namespace)::InternalPartForExternalCarrier { unsigned int y; } part;\n"
+                            "};\n", output);
+        }
+    },
 
 
 };
