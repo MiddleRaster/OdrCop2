@@ -109,24 +109,13 @@ namespace OdrCop2
             if (context->getSourceManager().isInSystemHeader(enumDecl->getLocation()))
                 return true; // skip anything not in the main file or a user header
 
+            if (enumDecl->isInAnonymousNamespace())
+                return true; // TU-local, not an ODR candidate
+
             if (enumDecl->isThisDeclarationADefinition())
             {
-                std::string underlyingType = enumDecl->getIntegerType().getCanonicalType().getAsString();
-                bool              isScoped = enumDecl->isScoped();   // enum class vs enum
-                bool               isFixed = enumDecl->isFixed();
-                std::string       enumName = enumDecl->getNameAsString();
-                std::string     prettyEnum = enumDecl->getQualifiedNameAsString();
-
-                std::string fqe = (isScoped ? "enum class " : "enum ") + prettyEnum + (isFixed ? " : " + underlyingType : "") + " { ";
-                for (const clang::EnumConstantDecl* enumeratorDecl : enumDecl->enumerators())
-                {
-                    std::string enumeratorName = enumeratorDecl->getName().str();
-                    std::string val            = llvm::toString(enumeratorDecl->getInitVal(), 10);
-                    fqe += enumeratorName  +  "="  +  val + ", ";
-                }
-                fqe = fqe.substr(0, fqe.size()-2) + " };";
-                
-                maps.enumMap[prettyEnum].push_back({TU, fqe});
+                std::string  prettyName = enumDecl->getNameAsString() == "" ? makeUnnamedEnumKey(enumDecl) : enumDecl->getQualifiedNameAsString();
+                maps.enumMap[prettyName].push_back({TU, ConstructEnumDefinition(enumDecl) + ";" });
             }
             return true;
         }
@@ -146,6 +135,34 @@ namespace OdrCop2
         }
 
     private:
+        std::string makeUnnamedEnumKey(const clang::EnumDecl* enumDecl)
+        {
+            // 1. Build the fully qualified parent chain
+            std::string parent;
+            const clang::DeclContext* declContext = enumDecl->getDeclContext();
+            while (declContext && !declContext->isTranslationUnit())
+            {
+                if (const auto* recordDecl = llvm::dyn_cast<clang::RecordDecl>(declContext))
+                    parent = recordDecl->getNameAsString() + "::" + parent;
+                else if (const auto* namespaceDecl = llvm::dyn_cast<clang::NamespaceDecl>(declContext))
+                {
+                    if (!namespaceDecl->isAnonymousNamespace())
+                        parent = namespaceDecl->getNameAsString() + "::" + parent;
+                }
+                declContext = declContext->getParent();
+            }
+
+            // 2. Extract the first enumerator name
+            std::string firstEnumName;
+            if (!enumDecl->enumerators().empty())
+                firstEnumName = enumDecl->enumerators().begin()->getName().str();
+            else
+                firstEnumName = "<empty>";
+
+            // 3. Construct the final key
+            return parent + "(unnamed enum: " + firstEnumName + ")";
+        }
+
         std::string TemplateArgsToString(const clang::TemplateArgumentList& args)
         {
             std::string out;
@@ -273,8 +290,13 @@ namespace OdrCop2
             // return type
             const auto* parentRecord = clang::dyn_cast<clang::CXXRecordDecl>(funcDecl->getParent());
             bool   isTemplateContext = funcDecl->getDescribedFunctionTemplate() != nullptr || (parentRecord && parentRecord->getDescribedClassTemplate() != nullptr);
-            fqn += isTemplateContext ? funcDecl->getReturnType().getAsString(printPolicy)
-                                     : funcDecl->getReturnType().getCanonicalType().getAsString(printPolicy);
+            if (isTemplateContext)
+                fqn += funcDecl->getReturnType().getAsString(printPolicy);
+            else if (const Type* ty = funcDecl->getReturnType().getTypePtr(); ty->isEnumeralType())
+                fqn += ConstructEnumName(ty->getAs<EnumType>()->getDecl(), nullptr);
+            else
+                fqn += funcDecl->getReturnType().getCanonicalType().getAsString(printPolicy);
+
             fqn += " ";
 
             // calling convention
@@ -720,6 +742,10 @@ namespace OdrCop2
                             out += " ";
                             out += field->getNameAsString();
                         }
+                        else if (const auto* enumTy = llvm::dyn_cast<clang::EnumType>(type); enumTy && !enumTy->getDecl()->getIdentifier())
+                        {
+                            out += ConstructEnumDefinition(enumTy->getDecl()) + " " + field->getNameAsString();
+                        }
                         else
                         { // field must be done this way to handle array fields as well.
                             std::string fieldStr;
@@ -740,15 +766,7 @@ namespace OdrCop2
                     }
 
                     if (field->hasInClassInitializer())
-                    {
-                        const Expr*      expr = field->getInClassInitializer();
-                        llvm::StringRef  text = clang::Lexer::getSourceText(CharSourceRange::getTokenRange(expr->getSourceRange()), context->getSourceManager(), context->getLangOpts());
-                        std::string      init = text.str();
-                        if ((init.starts_with("{")) || init.starts_with("("))
-                            out +=       init;
-                        else
-                            out += "=" + init;
-                    }
+                        out += AddClassInitializer(field);
 
                     out += ";\n";
                     continue;
@@ -813,6 +831,12 @@ namespace OdrCop2
                 if (clang::isa<clang::IndirectFieldDecl>(decl))
                     continue; // these are Clang's mechanism for exposing the members of an anonymous struct/union as if they were directly accessible in the enclosing class.
 
+                if (const auto* enumDecl = clang::dyn_cast<clang::EnumDecl>(decl))
+                {   // a locally defined enum
+                    out += ConstructEnumDefinition(enumDecl) + ";";
+                    continue;
+                }
+
                 { // unhandled
                     out += "unhandled clang::Decl ";
                     out += decl->getDeclKindName();
@@ -867,21 +891,85 @@ namespace OdrCop2
                 }
 
                 if (innerField->hasInClassInitializer())
-                {
-                    const Expr* expr = innerField->getInClassInitializer();
-                    llvm::StringRef text = clang::Lexer::getSourceText(CharSourceRange::getTokenRange(expr->getSourceRange()), context->getSourceManager(), context->getLangOpts());
-                    std::string     init = text.str();
-                    if ((init.starts_with("{")) || init.starts_with("("))
-                        out += init;
-                    else
-                        out += "=" + init;
-                }
+                    out += AddClassInitializer(innerField);
 
                 out += "; ";
             }
             out += "}";
             return out;
         }
+        std::string AddClassInitializer(const clang::FieldDecl* fieldDecl)
+        {
+            std::string out;
+            const Expr* expr      = fieldDecl->getInClassInitializer();
+            const auto* declRef   = llvm::dyn_cast<clang::DeclRefExpr>(expr->IgnoreParenImpCasts());
+            const auto* enumConst = declRef ? llvm::dyn_cast<clang::EnumConstantDecl>(declRef->getDecl()) : nullptr;
+            if (enumConst)
+            {
+                const auto* enumDecl = llvm::dyn_cast<clang::EnumDecl>(enumConst->getDeclContext());
+                out += "=" + ConstructEnumName(enumDecl, enumConst);
+            }
+            else
+            {
+                llvm::StringRef  text = clang::Lexer::getSourceText(CharSourceRange::getTokenRange(expr->getSourceRange()), context->getSourceManager(), context->getLangOpts());
+                std::string      init = text.str();
+                if ((init.starts_with("{")) || init.starts_with("("))
+                    out += init;
+                else
+                    out += "=" + init;
+            }
+            return out;
+        }
+
+        std::string ConstructEnumName(const EnumDecl* enumDecl, const EnumConstantDecl* enumConst)
+        {
+            std::string out;
+
+            if (enumDecl && enumDecl->isInAnonymousNamespace())
+            {   // inline the full enum definition so the complete shape is compared
+                std::string enumStr = enumDecl->isScoped() ? "enum class " : "enum ";
+                enumStr += "(anonymous namespace)::";
+                if (enumDecl->getIdentifier() != nullptr)
+                    enumStr += enumDecl->getNameAsString() + " ";
+                else
+                    enumStr += "(unnamed enum) ";
+                if (enumDecl->isFixed())
+                    enumStr += ": " + enumDecl->getIntegerType().getCanonicalType().getAsString() + " ";
+                enumStr += "{ ";
+                for (const clang::EnumConstantDecl* e : enumDecl->enumerators())
+                    enumStr += e->getNameAsString() + "=" + llvm::toString(e->getInitVal(), 10) + ", ";
+                if (enumDecl->enumerators().empty())
+                    enumStr += "}";
+                else
+                    enumStr = enumStr.substr(0, enumStr.size() - 2) + " }";
+                out += enumStr + (enumConst != nullptr ? "::" + enumConst->getNameAsString() : "");
+            }
+            else if (enumDecl)
+                out += enumDecl->getQualifiedNameAsString() + (enumConst != nullptr ? "::" + enumConst->getNameAsString() : "");
+            else if (enumConst)
+                out += enumConst->getNameAsString();
+            // else not an enum
+            return out;
+        }
+        std::string ConstructEnumDefinition(const clang::EnumDecl* enumDecl)
+        {
+            std::string underlyingType = enumDecl->getIntegerType().getCanonicalType().getAsString();
+            bool              isScoped = enumDecl->isScoped();   // enum class vs enum
+            bool               isFixed = enumDecl->isFixed();
+            std::string       enumName = enumDecl->getNameAsString();
+            std::string     prettyEnum = enumName == "" ? makeUnnamedEnumKey(enumDecl) : enumDecl->getQualifiedNameAsString();
+
+            std::string fqe = (isScoped ? "enum class " : "enum ") + prettyEnum + (isFixed ? " : " + underlyingType : "") + " { ";
+            for (const clang::EnumConstantDecl* enumeratorDecl : enumDecl->enumerators())
+            {
+                std::string enumeratorName = enumeratorDecl->getName().str();
+                std::string val = llvm::toString(enumeratorDecl->getInitVal(), 10);
+                fqe += enumeratorName + "=" + val + ", ";
+            }
+            fqe = fqe.substr(0, fqe.size() - 2) + " }";
+            return fqe;
+        }
+
         std::string ConstructAttribute(const Attr* attr)
         {
             std::string out;
