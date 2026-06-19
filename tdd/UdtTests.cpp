@@ -30,7 +30,7 @@ Test UdtTests[] =
             Assert::IsTrue(ok);
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
-            Assert::AreEqual("struct S { // sizeof=4\n   int x;\n   int __cdecl foo();\n};", vec[0].fullyQualified, "should have gotten the entire struct but not the function body");
+            Assert::AreEqual("struct S { // sizeof=4\n   int x;\n   int __cdecl foo() { return x; }\n};", vec[0].fullyQualified, "should have gotten the entire struct but not the function body");
         }
     },
     {"class with one private method and one private data-member and one public method and one public data-member", []
@@ -49,10 +49,10 @@ Test UdtTests[] =
             Assert::AreEqual(1, maps.udtMap.size());
             const auto& vec = maps.udtMap.begin()->second;
             Assert::AreEqual("class Class { // sizeof=8\n"
-                             "   void __cdecl Private();\n"
+                             "   void __cdecl Private() {}\n"
                              "   const int privateInt=0;\n"
                              "public:\n"
-                             "   int __cdecl Public() const;\n"
+                             "   int __cdecl Public() const { return privateInt; }\n"
                              "   const int publicInt{-1};\n"
                              "};", vec[0].fullyQualified, "should have gotten the entire struct but not the function body");
         }
@@ -322,7 +322,7 @@ Test UdtTests[] =
             Assert::AreEqual(1, maps.functionMap.size(), "should see 1 function");
             { 
                 auto it = maps.functionMap.begin();
-                Assert::AreEqual("void __cdecl test()", it->second[0].fullyQualified, "can get the 'test' function");
+                Assert::AreEqual("void __cdecl test() { S<int> s; }", it->second[0].fullyQualified, "can get the 'test' function");
             }
 
             Assert::AreEqual(3, maps.udtMap.size(), "should see 3 UDTs");

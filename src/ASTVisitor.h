@@ -448,8 +448,101 @@ namespace OdrCop2
             if (funcDecl->isDeleted())
                 fqn += "= delete ";
 
-            // strip off the last " "
-            return fqn.substr(0, fqn.size()-1);
+            // if it's a ctor, get any initializers
+            if (const auto* ctor = clang::dyn_cast<clang::CXXConstructorDecl>(funcDecl))
+            {
+                if (ctor->init_begin() != ctor->init_end())
+                {
+                    fqn += ": ";
+                    bool first = true;
+                    for (const clang::CXXCtorInitializer* init : ctor->inits())
+                    {
+                        if (!first)
+                            fqn += ", ";
+                        first = false;
+
+                        if (init->isBaseInitializer())
+                            fqn += clang::QualType(init->getBaseClass(), 0).getAsString(printPolicy);
+                        else if (init->isMemberInitializer())
+                            fqn += init->getMember()->getNameAsString();
+                        else if (init->isIndirectMemberInitializer())
+                            fqn += init->getIndirectMember()->getNameAsString();
+                     // else if (init->isDelegatingInitializer())
+                     //     ;
+
+                        std::string argStr;
+                        llvm::raw_string_ostream os(argStr);
+                        init->getInit()->printPretty(os, nullptr, printPolicy);
+                        os.flush();
+                        fqn += "(" + argStr + ")";
+                    }
+                    fqn += " ";
+                }
+            }
+
+            if (!(funcDecl->hasBody() && funcDecl->getBody()))
+            { // no body:  end prototype with ';'
+                if (fqn.ends_with(' '))
+                    fqn = fqn.substr(0, fqn.size()-1);
+                fqn += ";";
+            }
+            else
+            { // append body
+                std::string body;
+                llvm::raw_string_ostream os(body);
+                funcDecl->getBody()->printPretty(os, nullptr, printPolicy);
+                os.flush();
+
+                // post-process body
+
+                // collapse to "{}" if there's no real content
+                bool allWhitespace = true;
+                for (char c : body) {
+                    if ((c == '{') ||
+                        (c == '}'))
+                        continue;
+                    if (!std::isspace(static_cast<unsigned char>(c))) {
+                        allWhitespace = false;
+                        break;
+                    }
+                }
+                if (allWhitespace)
+                    body = "{}";
+
+                // strip "this->"
+                const std::string target = "this->";
+                size_t pos = 0;
+                while ((pos = body.find(target, pos)) != std::string::npos)
+                    body.erase(pos, target.length());
+
+                // if it's a one-liner, remove all "\n   "
+                int  semicolons = 0;
+                for (char c : body) {
+                    if (c == ';')
+                        ++semicolons;
+                }
+                if (semicolons < 2) {
+                    size_t pos = 0;
+                    while ((pos = body.find("\n", pos)) != std::string::npos)
+                        body.replace(pos, 1, " ");
+
+                    pos = 0;
+                    while ((pos = body.find("  ", pos)) != std::string::npos)
+                        body.replace(pos, 2, " ");
+
+                    while (body.ends_with(' '))
+                        body = body.substr(0, body.size()-1); // strip off last ' '
+
+                    body += "\n";
+                }
+
+                fqn += body;
+                fqn = fqn.substr(0, fqn.size()-1); // strip off last '\n'
+            }
+
+            if (fqn.ends_with(' '))
+                fqn = fqn.substr(0, fqn.size()-1);
+            return fqn;
         }
         std::string getMSVCMangledName(const clang::FunctionDecl* funcDecl)
         {
@@ -676,8 +769,11 @@ namespace OdrCop2
                     if (method->isImplicit())
                         continue;
 
-                    out += "   " + ConstructFunctionSignature(method, false);
-                    out += ";\n";
+                    // recurse but indent
+                    std::istringstream iss(ConstructFunctionSignature(method, false));
+                    for (std::string line; std::getline(iss, line); )
+                        out += "   " + line + "\n";
+
                     continue;
                 }
                 if (const auto* nested = clang::dyn_cast<clang::CXXRecordDecl>(decl))

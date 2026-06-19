@@ -18,7 +18,7 @@ Test FunctionTests[] =
             OdrCop2::AllMaps maps;
             clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             const auto& vec = maps.functionMap.begin()->second;
-            Assert::AreEqual(L"int __cdecl foo()", vec[0].fullyQualified);
+            Assert::AreEqual(L"int __cdecl foo() { return 42; }", vec[0].fullyQualified);
         }
     },
     {"can get fully qualified function name", []
@@ -35,7 +35,7 @@ namespace MyNamespace
             OdrCop2::AllMaps maps;
             clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             const auto& vec = maps.functionMap.begin()->second;
-            Assert::AreEqual(L"int __cdecl MyNamespace::foo()", vec[0].fullyQualified, "should have found fully qualified function name");
+            Assert::AreEqual(L"int __cdecl MyNamespace::foo() { return 42; }", vec[0].fullyQualified, "should have found fully qualified function name");
         }
     },
     {"can get fully qualified function name from anonymous namespace", []
@@ -45,7 +45,7 @@ namespace MyNamespace
             OdrCop2::AllMaps maps;
             clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             const auto& vec = maps.functionMap.begin()->second;
-            Assert::AreEqual(L"int __cdecl (anonymous namespace)::foo()", vec[0].fullyQualified, "should have found fully qualified function name within anonymous namespace");
+            Assert::AreEqual(L"int __cdecl (anonymous namespace)::foo() { return 42; }", vec[0].fullyQualified, "should have found fully qualified function name within anonymous namespace");
         }
     },
     {"I wonder what happens if there's a compiler error", []
@@ -67,7 +67,7 @@ IamAtypedef foo() { return 42; }
             bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             Assert::IsTrue(ok);
             const auto& vec = maps.functionMap.begin()->second;
-            Assert::AreEqual("int __cdecl foo()", vec[0].fullyQualified, "should have returned fully qualified function name");
+            Assert::AreEqual("int __cdecl foo() { return 42; }", vec[0].fullyQualified, "should have returned fully qualified function name");
         }
     },
     {"Get mangled function name", []
@@ -91,7 +91,11 @@ IamAtypedef foo() { return 42; }
             bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
             Assert::IsTrue(ok);
             const auto& vec = maps.functionMap.begin()->second;
-            Assert::AreEqual("int __cdecl foo(char *, bool)", vec[0].fullyQualified, "should have found function");
+            Assert::AreEqual("int __cdecl foo(char *, bool) {\n"
+                             "    (void)p;\n"
+                             "    (void)b;\n"
+                             "    return 42;\n"
+                             "}", vec[0].fullyQualified, "should have found function");
         }
     },
     {"uninstantiated function templates and specializations work", []
@@ -107,8 +111,8 @@ IamAtypedef foo() { return 42; }
             auto it2 = std::next(it1);
 
             // alphabetized by key, so the specialization comes first
-            Assert::AreEqual(             "int __cdecl foo<int>(const int &)", it1->second[0].fullyQualified, "should have found the function template specialization");
-            Assert::AreEqual("template <typename T> T __cdecl foo(const T &)", it2->second[0].fullyQualified, "should have found the function template");
+            Assert::AreEqual("int __cdecl foo<int>(const int &) { return i + 1; }", it1->second[0].fullyQualified, "should have found the function template specialization");
+            Assert::AreEqual("template <typename T> T __cdecl foo(const T &);", it2->second[0].fullyQualified, "should have found the function template");
         }
     },
 };

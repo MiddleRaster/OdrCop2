@@ -218,7 +218,7 @@ Test ExploringOdrViolationReportingTests[] =
             std::ostringstream oss;
             int violations = OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.functionMap, oss);
             Assert::AreEqual(1, violations, "should have been one ODR violation");
-            Assert::AreEqual("\nODR VIOLATION: ?foo@@YAXXZ\n[tu1.cpp]\ninline void __cdecl foo()\n[tu2.cpp]\nvoid __cdecl foo()\n[tu3.cpp] - same as above\n", oss.str());
+            Assert::AreEqual("\nODR VIOLATION: ?foo@@YAXXZ\n[tu1.cpp]\ninline void __cdecl foo() {}\n[tu2.cpp]\nvoid __cdecl foo() {}\n[tu3.cpp] - same as above\n", oss.str());
         }
     },
     {"Report UDT ODR violations", []

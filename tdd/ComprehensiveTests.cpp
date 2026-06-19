@@ -168,8 +168,8 @@ Test ComprehensiveTests[] =
                             "class StructVsClassDefaultAccess { // sizeof=4\n"
                             "   int value;\n"
                             "public:\n"
-                            "   void __cdecl StructVsClassDefaultAccess();\n"
-                            "   int __cdecl get() const;\n"
+                            "   void __cdecl StructVsClassDefaultAccess() : value(10) {}\n"
+                            "   int __cdecl get() const { return value; }\n"
                             "};\n", output);
         }
     },
@@ -205,8 +205,8 @@ Test ComprehensiveTests[] =
                             "private:\n"
                             "   int privateValue;\n"
                             "public:\n"
-                            "   void __cdecl DifferentMemberAccess();\n"
-                            "   int __cdecl getPrivateValue() const;\n"
+                            "   void __cdecl DifferentMemberAccess() : publicValue(11), privateValue(12) {}\n"
+                            "   int __cdecl getPrivateValue() const { return privateValue; }\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "class DifferentMemberAccess { // sizeof=8\n"
@@ -214,8 +214,8 @@ Test ComprehensiveTests[] =
                             "   int publicValue;\n"
                             "public:\n"
                             "   int privateValue;\n"
-                            "   void __cdecl DifferentMemberAccess();\n"
-                            "   int __cdecl getPublicValue() const;\n"
+                            "   void __cdecl DifferentMemberAccess() : publicValue(11), privateValue(12) {}\n"
+                            "   int __cdecl getPublicValue() const { return publicValue; }\n"
                             "};\n", output);
         }
     },
@@ -295,13 +295,13 @@ Test ComprehensiveTests[] =
                             "ODR VIOLATION: DifferentVirtualShape\n"
                             "[tu3.cpp]\n"
                             "struct DifferentVirtualShape { // sizeof=16\n"
-                            "   virtual int __cdecl first();\n"
+                            "   virtual int __cdecl first() { return 16; }\n"
                             "   int data;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct DifferentVirtualShape { // sizeof=16\n"
-                            "   virtual int __cdecl first();\n"
-                            "   virtual int __cdecl second();\n"
+                            "   virtual int __cdecl first() { return 16; }\n"
+                            "   virtual int __cdecl second() { return 160; }\n"
                             "   int data;\n"
                             "};\n", output);
         }
@@ -315,12 +315,12 @@ Test ComprehensiveTests[] =
                             "ODR VIOLATION: DifferentVirtualFunctionName\n"
                             "[tu3.cpp]\n"
                             "struct DifferentVirtualFunctionName { // sizeof=16\n"
-                            "   virtual int __cdecl alpha();\n"
+                            "   virtual int __cdecl alpha() { return 17; }\n"
                             "   int data;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct DifferentVirtualFunctionName { // sizeof=16\n"
-                            "   virtual int __cdecl beta();\n"
+                            "   virtual int __cdecl beta() { return 17; }\n"
                             "   int data;\n"
                             "};\n", output);
         }
@@ -334,12 +334,12 @@ Test ComprehensiveTests[] =
                             "ODR VIOLATION: DifferentMethodVirtualness\n"
                             "[tu3.cpp]\n"
                             "struct DifferentMethodVirtualness { // sizeof=16\n"
-                            "   virtual int __cdecl value();\n"
+                            "   virtual int __cdecl value() { return 18; }\n"
                             "   int data;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct DifferentMethodVirtualness { // sizeof=4\n"
-                            "   int __cdecl value();\n"
+                            "   int __cdecl value() { return 18; }\n"
                             "   int data;\n"
                             "};\n", output);
         }
@@ -353,12 +353,12 @@ Test ComprehensiveTests[] =
                             "ODR VIOLATION: DifferentMethodConstness\n"
                             "[tu3.cpp]\n"
                             "struct DifferentMethodConstness { // sizeof=4\n"
-                            "   int __cdecl value() const;\n"
+                            "   int __cdecl value() const { return 19; }\n"
                             "   int data;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct DifferentMethodConstness { // sizeof=4\n"
-                            "   int __cdecl value();\n"
+                            "   int __cdecl value() { return 19; }\n"
                             "   int data;\n"
                             "};\n", output);
         }
@@ -382,19 +382,19 @@ Test ComprehensiveTests[] =
             Assert::AreEqual("\n"
                             "ODR VIOLATION: ?value@DifferentMethodNoexcept@@QEAAHXZ\n"
                             "[tu3.cpp]\n"
-                            "int __cdecl DifferentMethodNoexcept::value() noexcept\n"
+                            "int __cdecl DifferentMethodNoexcept::value() noexcept { return 20; }\n"
                             "[tu4.cpp]\n"
-                            "int __cdecl DifferentMethodNoexcept::value()\n"
+                            "int __cdecl DifferentMethodNoexcept::value() { return 20; }\n"
                             "\n"
                             "ODR VIOLATION: DifferentMethodNoexcept\n"
                             "[tu3.cpp]\n"
                             "struct DifferentMethodNoexcept { // sizeof=4\n"
-                            "   int __cdecl value() noexcept;\n"
+                            "   int __cdecl value() noexcept { return 20; }\n"
                             "   int data;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct DifferentMethodNoexcept { // sizeof=4\n"
-                            "   int __cdecl value();\n"
+                            "   int __cdecl value() { return 20; }\n"
                             "   int data;\n"
                             "};\n", output);
         }
@@ -407,19 +407,19 @@ Test ComprehensiveTests[] =
             Assert::AreEqual("\n"
                             "ODR VIOLATION: ?value@DifferentMethodAttributes@@QEAAHXZ\n"
                             "[tu3.cpp]\n"
-                            "int __cdecl DifferentMethodAttributes::value()\n"
+                            "int __cdecl DifferentMethodAttributes::value() { return 20; }\n"
                             "[tu4.cpp]\n"
-                            "[[nodiscard]] int __cdecl DifferentMethodAttributes::value()\n"
+                            "[[nodiscard]] int __cdecl DifferentMethodAttributes::value() { return 20; }\n"
                             "\n"
                             "ODR VIOLATION: DifferentMethodAttributes\n"
                             "[tu3.cpp]\n"
                             "struct DifferentMethodAttributes { // sizeof=4\n"
-                            "   int __cdecl value();\n"
+                            "   int __cdecl value() { return 20; }\n"
                             "   int data;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct DifferentMethodAttributes { // sizeof=4\n"
-                            "   [[nodiscard]] int __cdecl value();\n"
+                            "   [[nodiscard]] int __cdecl value() { return 20; }\n"
                             "   int data;\n"
                             "};\n", output);
         }
@@ -452,12 +452,12 @@ Test ComprehensiveTests[] =
                             "ODR VIOLATION: DifferentStaticMemberFunction\n"
                             "[tu3.cpp]\n"
                             "struct DifferentStaticMemberFunction { // sizeof=4\n"
-                            "   static int __cdecl value();\n"
+                            "   static int __cdecl value() { return 22; }\n"
                             "   int payload;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct DifferentStaticMemberFunction { // sizeof=4\n"
-                            "   static long __cdecl value();\n"
+                            "   static long __cdecl value() { return 22L; }\n"
                             "   int payload;\n"
                             "};\n", output);
         }
@@ -636,14 +636,17 @@ Test ComprehensiveTests[] =
             Assert::AreEqual("", output);
         }
     },
-    //{"TU34-034: Same external-linkage inline function name and signature, different body. Expected ODR violation: YES.", []
-    //    {
-    //        const auto& [violations, output] = RunTest( "inline int DifferentInlineFunctionBody(int x) { return x + 34; }"
-    //                                                ,   "inline int DifferentInlineFunctionBody(int x) { return x + 340; }");
-    //        Assert::AreEqual(1, violations, "there should be 1 ODR violation");
-    //        Assert::AreEqual("\n"
-    //                        "not implemented yet"
-    //                        "};\n", output);
-    //    }
-    //},
+    {"TU34-034: Same external-linkage inline function name and signature, different body. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "inline int DifferentInlineFunctionBody(int x) { return x + 34; }"
+                                                    ,   "inline int DifferentInlineFunctionBody(int x) { return x + 340; }");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: ?DifferentInlineFunctionBody@@YAHH@Z\n"
+                            "[tu3.cpp]\n"
+                            "inline int __cdecl DifferentInlineFunctionBody(int) { return x + 34; }\n"
+                            "[tu4.cpp]\n"
+                            "inline int __cdecl DifferentInlineFunctionBody(int) { return x + 340; }\n", output);
+        }
+    },
 };
