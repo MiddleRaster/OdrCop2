@@ -692,6 +692,235 @@ Test ComprehensiveTests[] =
                             "};\n", output);
         }
     },
+    {"TU34-039: Anonymous-namespace type used only by another internal-linkage type, different layout. Expected ODR violation: NO.", []
+        {
+            const auto& [violations, output] = RunTest( "namespace { struct InternalOnlyPart { int    x; }; struct InternalOnlyCarrier { InternalOnlyPart part; }; }"
+                                                    ,   "namespace { struct InternalOnlyPart { double y; }; struct InternalOnlyCarrier { InternalOnlyPart part; }; }");
 
+            Assert::AreEqual(0, violations, "there should be 0 ODR violation");
+            Assert::AreEqual("", output);
+        }
+    },
+    {"TU34-040: Same external-linkage function pointer member type, pointee signature differs. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentFunctionPointerMember {  int (*callback)( int); }; int  CallbackForTU3( int x) { return x + 40;  }"
+                                                    ,   "struct DifferentFunctionPointerMember { long (*callback)(long); }; long CallbackForTU4(long x) { return x + 40L; }");
 
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentFunctionPointerMember\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentFunctionPointerMember { // sizeof=8\n"
+                            "   int (*callback)(int);\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentFunctionPointerMember { // sizeof=8\n"
+                            "   long (*callback)(long);\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-041: Same external-linkage pointer-to-member type, member type differs. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct MemberPointerTarget {  int value; }; struct DifferentPointerToMember {  int MemberPointerTarget::* member; };"
+                                                    ,   "struct MemberPointerTarget { long value; }; struct DifferentPointerToMember { long MemberPointerTarget::* member; };");
+
+            Assert::AreEqual(2, violations, "there should be 2 ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentPointerToMember\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentPointerToMember { // sizeof=4\n"
+                            "   int MemberPointerTarget::*member;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentPointerToMember { // sizeof=4\n"
+                            "   long MemberPointerTarget::*member;\n"
+                            "};\n"
+                            "\n"
+                            "ODR VIOLATION: MemberPointerTarget\n"
+                            "[tu3.cpp]\n"
+                            "struct __single_inheritance MemberPointerTarget { // sizeof=4\n"
+                            "   int value;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct __single_inheritance MemberPointerTarget { // sizeof=4\n"
+                            "   long value;\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-042: Same external-linkage array member type, bound differs. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentArrayBound { int values[3]; };"
+                                                    ,   "struct DifferentArrayBound { int values[4]; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentArrayBound\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentArrayBound { // sizeof=12\n"
+                            "   int values[3];\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentArrayBound { // sizeof=16\n"
+                            "   int values[4];\n"
+                            "};\n", output);
+        }
+    },
+    { "TU34-043: Same external-linkage volatile/const qualification on member differs. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest ("struct DifferentCvQualifiedMember {    const int value; };"
+                                                    ,   "struct DifferentCvQualifiedMember { volatile int value; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentCvQualifiedMember\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentCvQualifiedMember { // sizeof=4\n"
+                            "   const int value;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentCvQualifiedMember { // sizeof=4\n"
+                            "   volatile int value;\n"
+                            "};\n", output);
+        }
+    },
+    { "TU34-044: Same external-linkage nested class name, nested member differs. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest ("struct DifferentNestedClass { struct Nested {    int x; }; Nested nested; };"
+                                                    ,   "struct DifferentNestedClass { struct Nested { double y; }; Nested nested; };");
+            Assert::AreEqual(2, violations, "there should be 2 ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentNestedClass\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentNestedClass { // sizeof=4\n"
+                            "   struct DifferentNestedClass::Nested { // sizeof=4\n"
+                            "      int x;\n"
+                            "   };\n"
+                            "   Nested nested;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentNestedClass { // sizeof=8\n"
+                            "   struct DifferentNestedClass::Nested { // sizeof=8\n"
+                            "      double y;\n"
+                            "   };\n"
+                            "   Nested nested;\n"
+                            "};\n"
+                            "\n"
+                            "ODR VIOLATION: DifferentNestedClass::Nested\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentNestedClass::Nested { // sizeof=4\n"
+                            "   int x;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentNestedClass::Nested { // sizeof=8\n"
+                            "   double y;\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-045: Same external-linkage nested enum name, nested enumerators differ. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest ("struct DifferentNestedEnum { enum Kind { alpha = 1, beta = 2 }; Kind kind; };"
+                                                    ,   "struct DifferentNestedEnum { enum Kind { alpha = 1, gamma = 3 }; Kind kind; };");
+            Assert::AreEqual(2, violations, "there should be 2 ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentNestedEnum::Kind\n"
+                            "[tu3.cpp]\n"
+                            "enum DifferentNestedEnum::Kind { alpha=1, beta=2 };\n"
+                            "[tu4.cpp]\n"
+                            "enum DifferentNestedEnum::Kind { alpha=1, gamma=3 };\n"
+                            "\n"
+                            "ODR VIOLATION: DifferentNestedEnum\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentNestedEnum { // sizeof=4\n"
+                            "enum DifferentNestedEnum::Kind { alpha=1, beta=2 };   Kind kind;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentNestedEnum { // sizeof=4\n"
+                            "enum DifferentNestedEnum::Kind { alpha=1, gamma=3 };   Kind kind;\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-046: Same external-linkage empty class definition. Expected ODR violation: NO.", []
+        {
+            const auto& [violations, output] = RunTest ("struct IdenticalEmpty {};"
+                                                    ,   "struct IdenticalEmpty {};");
+            Assert::AreEqual(0, violations, "there should be 0 ODR violations");
+            Assert::AreEqual("", output);
+        }
+    },
+    {"TU34-047: Same external-linkage empty class vs non-empty class. Expected ODR violation: YES.", []
+        {
+            const auto& [violations, output] = RunTest( "struct EmptyVsNonEmpty {};"
+                                                    ,   "struct EmptyVsNonEmpty { int value; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: EmptyVsNonEmpty\n"
+                            "[tu3.cpp]\n"
+                            "struct EmptyVsNonEmpty { // sizeof=1\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct EmptyVsNonEmpty { // sizeof=4\n"
+                            "   int value;\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-048: Same external-linkage class name, default constructor member initializer differs. Expected ODR violation: YES if constructor bodies/debug records are compared.", []
+        {
+            const auto& [violations, output] = RunTest( "struct DifferentConstructorInitializer { int value; DifferentConstructorInitializer() : value(48) {} };"
+                                                    ,   "struct DifferentConstructorInitializer { int value; DifferentConstructorInitializer() : value(480) {} };");
+            Assert::AreEqual(2, violations, "there should be 2 ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: ??0DifferentConstructorInitializer@@QEAA@XZ\n"
+                            "[tu3.cpp]\n"
+                            "void __cdecl DifferentConstructorInitializer::DifferentConstructorInitializer() : value(48) {}\n"
+                            "[tu4.cpp]\n"
+                            "void __cdecl DifferentConstructorInitializer::DifferentConstructorInitializer() : value(480) {}\n"
+                            "\n"
+                            "ODR VIOLATION: DifferentConstructorInitializer\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentConstructorInitializer { // sizeof=4\n"
+                            "   int value;\n"
+                            "   void __cdecl DifferentConstructorInitializer() : value(48) {}\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentConstructorInitializer { // sizeof=4\n"
+                            "   int value;\n"
+                            "   void __cdecl DifferentConstructorInitializer() : value(480) {}\n"
+                            "};\n", output);
+        }
+    },
+    {"TU34-049: Same external-linkage lambda closure use through an inline function, identical shape. Expected ODR violation: NO.", []
+        {
+            const auto& [violations, output] = RunTest( "inline int IdenticalLambdaUser(int x) { auto lambda = [](int y) { return y + 49; }; return lambda(x); }"
+                                                    ,   "inline int IdenticalLambdaUser(int x) { auto lambda = [](int y) { return y + 49; }; return lambda(x); }");
+            Assert::AreEqual(0, violations, "there should be 0 ODR violation(s)");
+            Assert::AreEqual("", output);
+        }
+    },
+    {"TU34-050: Same external-linkage lambda closure use through an inline function, different body. Expected ODR violation: YES if function/lambda bodies are compared.", []
+        {
+            const auto& [violations, output] = RunTest( "inline int DifferentLambdaUser(int x) { auto lambda = [](int y) { return y + 50; }; return lambda(x); }"
+                                                    ,   "inline int DifferentLambdaUser(int x) { auto lambda = [](int y) { return y + 500; }; return lambda(x); }");
+            Assert::AreEqual(2, violations, "there should be 2 ODR violation(s)");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: ??R<lambda_1>@?0??DifferentLambdaUser@@YAHH@Z@QEBA?A?<auto>@@H@Z\n"
+                            "[tu3.cpp]\n"
+                            "inline int __cdecl DifferentLambdaUser(int)::(lambda)::operator()(int) const { return y + 50; }\n"
+                            "[tu4.cpp]\n"
+                            "inline int __cdecl DifferentLambdaUser(int)::(lambda)::operator()(int) const { return y + 500; }\n"
+                            "\n"
+                            "ODR VIOLATION: ?DifferentLambdaUser@@YAHH@Z\n"
+                            "[tu3.cpp]\n"
+                            "inline int __cdecl DifferentLambdaUser(int) {\n"
+                            "    auto lambda = [](int y) {\n"
+                            "        return y + 50;\n"
+                            "    };\n"
+                            "    return lambda(x);\n"
+                            "}\n"
+                            "[tu4.cpp]\n"
+                            "inline int __cdecl DifferentLambdaUser(int) {\n"
+                            "    auto lambda = [](int y) {\n"
+                            "        return y + 500;\n"
+                            "    };\n"
+                            "    return lambda(x);\n"
+                            "}\n", output);
+        }
+    },
 };
