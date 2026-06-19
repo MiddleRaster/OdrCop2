@@ -649,4 +649,12 @@ Test ComprehensiveTests[] =
                             "inline int __cdecl DifferentInlineFunctionBody(int) { return x + 340; }\n", output);
         }
     },
+    {"TU34-035: Same internal-linkage static function name, different body. Expected ODR violation: NO.", []
+        {
+            const auto& [violations, output] = RunTest( "static int SameStaticFunctionNameDifferentBody(int x) { return x + 35; }"
+                                                    ,   "static int SameStaticFunctionNameDifferentBody(int x) { return x + 350; }");
+            Assert::AreEqual(0, violations, "there should be no ODR violation");
+            Assert::AreEqual("", output);
+        }
+    },
 };

@@ -38,14 +38,13 @@ namespace MyNamespace
             Assert::AreEqual(L"int __cdecl MyNamespace::foo() { return 42; }", vec[0].fullyQualified, "should have found fully qualified function name");
         }
     },
-    {"can get fully qualified function name from anonymous namespace", []
+    {"internal-linkage/anonymous namespace functions are never part of an ODR violation", []
         {
             std::string code = R"( namespace { int foo() { return 42; } } )";
 
             OdrCop2::AllMaps maps;
             clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++" });
-            const auto& vec = maps.functionMap.begin()->second;
-            Assert::AreEqual(L"int __cdecl (anonymous namespace)::foo() { return 42; }", vec[0].fullyQualified, "should have found fully qualified function name within anonymous namespace");
+            Assert::AreEqual(0, maps.functionMap.size(), "no internal-linkage functions should have been found");
         }
     },
     {"I wonder what happens if there's a compiler error", []

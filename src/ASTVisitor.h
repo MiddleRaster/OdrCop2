@@ -73,6 +73,9 @@ namespace OdrCop2
             if (context->getSourceManager().isInSystemHeader(funcDecl->getLocation()))
                 return true; // skip anything not in the main file or a user header
 
+            if (funcDecl->getStorageClass() == clang::SC_Static || funcDecl->isInAnonymousNamespace())
+                return true; // if the function has internal-linkage, skip it
+
             if (funcDecl->isThisDeclarationADefinition())
             {
                 auto mangledName = getMSVCMangledName(funcDecl);
