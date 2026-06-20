@@ -1740,11 +1740,187 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
             Assert::AreEqual("", output);
         }
     },
-
-
-
-
-
+    {"Same function name with same parameter struct but it's actually different", []
+        {
+            const auto& [violations, output] = RunTest ("struct DifferentDataMembers { int a;        }; inline void FunctionUsing_DifferentDataMembers(DifferentDataMembers) {}"
+                                                      , "struct DifferentDataMembers { int a; int b; }; inline void FunctionUsing_DifferentDataMembers(DifferentDataMembers) {}");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentDataMembers\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentDataMembers { // sizeof=4\n"
+                            "   int a;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentDataMembers { // sizeof=8\n"
+                            "   int a;\n"
+                            "   int b;\n"
+                            "};\n", output);
+        }
+    },
+    {"Same function name with same parameter enum but it's actually different", []
+        {
+            const auto& [violations, output] = RunTest ("enum SameEnumNameDifferentEnumerators { sendeA         }; inline void FunctionUsing_SameEnumNameDifferentEnumerators(SameEnumNameDifferentEnumerators) {}"
+                                                      , "enum SameEnumNameDifferentEnumerators { sendeA, sendeB }; inline void FunctionUsing_SameEnumNameDifferentEnumerators(SameEnumNameDifferentEnumerators) {}");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: SameEnumNameDifferentEnumerators\n"
+                            "[tu3.cpp]\n"
+                            "enum SameEnumNameDifferentEnumerators { sendeA=0 };\n"
+                            "[tu4.cpp]\n"
+                            "enum SameEnumNameDifferentEnumerators { sendeA=0, sendeB=1 };\n"
+                           , output);
+        }
+    },
+    {"Same function name with same parameter strucct template but it's actually different", []
+        {
+            const auto& [violations, output] = RunTest ("template<class T> struct SameTemplateDifferentDefinition { int a;         }; inline void FunctionUsing_SameTemplateDifferentDefinition(SameTemplateDifferentDefinition<int>) {}"
+                                                      , "template<class T> struct SameTemplateDifferentDefinition { int a;  int b; }; inline void FunctionUsing_SameTemplateDifferentDefinition(SameTemplateDifferentDefinition<int>) {}");
+            Assert::AreEqual(2, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: SameTemplateDifferentDefinition<>\n"
+                            "[tu3.cpp]\n"
+                            "template<class T> struct SameTemplateDifferentDefinition {\n"
+                            "   int a;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "template<class T> struct SameTemplateDifferentDefinition {\n"
+                            "   int a;\n"
+                            "   int b;\n"
+                            "};\n"
+                            "\n"
+                            "ODR VIOLATION: SameTemplateDifferentDefinition<int>\n"
+                            "[tu3.cpp]\n"
+                            "template<> struct SameTemplateDifferentDefinition<int> { // sizeof=4\n"
+                            "   int a;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "template<> struct SameTemplateDifferentDefinition<int> { // sizeof=8\n"
+                            "   int a;\n"
+                            "   int b;\n"
+                            "};\n", output);
+        }
+    },
+    {"Inline function using inline with different bodies", []
+        {
+            const auto& [violations, output] = RunTest ("inline int InlinedBody() { return 1; } inline void FunctionUsing_InlinedBody() { InlinedBody(); }"
+                                                      , "inline int InlinedBody() { return 2; } inline void FunctionUsing_InlinedBody() { InlinedBody(); }");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: ?InlinedBody@@YAHXZ\n"
+                            "[tu3.cpp]\n"
+                            "inline int __cdecl InlinedBody() { return 1; }\n"
+                            "[tu4.cpp]\n"
+                            "inline int __cdecl InlinedBody() { return 2; }\n"
+                          , output);
+        }
+    },
+    {"Same function name with same parameter union but it's actually different",[]
+        {
+            const auto& [violations, output] = RunTest ("union SameUnionNameDifferentElements { int i; float f;           }; inline void FunctionUsing_SameUnionNameDifferentElements(SameUnionNameDifferentElements) {}"
+                                                      , "union SameUnionNameDifferentElements { int i; float f; double d; }; inline void FunctionUsing_SameUnionNameDifferentElements(SameUnionNameDifferentElements) {}");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: SameUnionNameDifferentElements\n"
+                            "[tu3.cpp]\n"
+                            "union SameUnionNameDifferentElements { // sizeof=4\n"
+                            "   int i;\n"
+                            "   float f;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "union SameUnionNameDifferentElements { // sizeof=8\n"
+                            "   int i;\n"
+                            "   float f;\n"
+                            "   double d;\n"
+                            "};\n", output);
+        }
+    },
+    {"Same struct method name but bodies differ", []
+        {
+            const auto& [violations, output] = RunTest ("struct StaticMethodsBodiesDiffer { static int Foo() { return 1; } };"
+                                                      , "struct StaticMethodsBodiesDiffer { static int Foo() { return 2; } };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: StaticMethodsBodiesDiffer\n"
+                            "[tu3.cpp]\n"
+                            "struct StaticMethodsBodiesDiffer { // sizeof=1\n"
+                            "   static int __cdecl Foo() { return 1; }\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct StaticMethodsBodiesDiffer { // sizeof=1\n"
+                            "   static int __cdecl Foo() { return 2; }\n"
+                            "};\n", output);
+        }
+    },
+    {"a friend function vs. non-friend method", []
+        {
+            const auto& [violations, output] = RunTest ("struct ClassForFriend { friend int TheFriendFunction(ClassForFriend) { return 2; } };"
+                                                      , "struct ClassForFriend {        int TheFriendFunction(ClassForFriend) { return 2; } };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: ClassForFriend\n"
+                            "[tu3.cpp]\n"
+                            "struct ClassForFriend { // sizeof=1\n"
+                            "   friend int __cdecl TheFriendFunction(ClassForFriend) { return 2; }\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct ClassForFriend { // sizeof=1\n"
+                            "   int __cdecl TheFriendFunction(ClassForFriend) { return 2; }\n"
+                            "};\n", output);
+        }
+    },
+    {"a friend function template vs. non-friend method template", []
+        {
+            const auto& [violations, output] = RunTest ("struct ClassForFriend { template<typename T> friend int TheFriendFunction(ClassForFriend, T) { return 2; } };"
+                                                      , "struct ClassForFriend { template<typename T>        int TheFriendFunction(ClassForFriend, T) { return 2; } };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: ClassForFriend\n"
+                            "[tu3.cpp]\n"
+                            "struct ClassForFriend { // sizeof=1\n"
+                            "   template <typename T> friend int __cdecl TheFriendFunction(ClassForFriend, T) { return 2; }\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct ClassForFriend { // sizeof=1\n"
+                            "   template <typename T> int __cdecl TheFriendFunction(ClassForFriend, T) { return 2; }\n"
+                            "};\n", output);
+        }
+    },
+    {"a friend class template vs. non-friend class template", []
+        {
+            const auto& [violations, output] = RunTest ("struct ClassForFriend { template<typename T> friend class TheFriendClass; };"
+                                                      , "struct ClassForFriend { template<typename T>        class TheFriendClass; };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: ClassForFriend\n"
+                            "[tu3.cpp]\n"
+                            "struct ClassForFriend { // sizeof=1\n"
+                            "   template<typename T> friend class TheFriendClass;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct ClassForFriend { // sizeof=1\n"
+                            "   template<typename T> class TheFriendClass;\n"
+                            "};\n", output);
+        }
+    },
+    {"a nested friend class declaration vs. non-friend class declarations", []
+        {
+            const auto& [violations, output] = RunTest ("struct ClassForFriend { friend class TheFriendClass; };"
+                                                      , "struct ClassForFriend {        class TheFriendClass{}; };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: ClassForFriend\n"
+                            "[tu3.cpp]\n"
+                            "struct ClassForFriend { // sizeof=1\n"
+                            "   friend class TheFriendClass;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct ClassForFriend { // sizeof=1\n"
+                            "   class ClassForFriend::TheFriendClass { // sizeof=1\n"
+                            "   };\n"
+                            "};\n", output);
+        }
+    },
 
 
 

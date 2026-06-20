@@ -328,7 +328,7 @@ namespace OdrCop2
                     if (wantFullyQualifiedMethodName)
                         ftd->getTemplatedDecl()->printQualifiedName(os, printPolicy);
                     else
-                        ftd->getTemplatedDecl()->getNameAsString();
+                        out = ftd->getTemplatedDecl()->getNameAsString();
                 }
                 else
                 {
@@ -608,78 +608,8 @@ namespace OdrCop2
             // template
             const clang::ClassTemplateDecl* ctd = recordDecl->getDescribedClassTemplate();
             if (ctd)
-            {
-                bool first = true;
-                out        = "template<";
-                const clang::TemplateParameterList* params = ctd->getTemplateParameters();
-                for (const clang::NamedDecl* param : *params)
-                {
-                    if (!first)
-                        out += ", ";
-                    first = false;
-
-                    if (const auto* ttp = clang::dyn_cast<clang::TemplateTypeParmDecl>(param))
-                    {
-                        out += ttp->wasDeclaredWithTypename() ? "typename" : "class";
-                        if (!ttp->getName().empty())
-                            out += " " + ttp->getName().str();
-
-                        if (ttp->hasDefaultArgument())
-                        {
-                            clang::QualType defaultType = ttp->getDefaultArgument().getArgument().getAsType();
-                            out += "=";
-                            out += defaultType.getAsString(printPolicy);
-                        }
-                    }
-                    else if (const auto* nttp = clang::dyn_cast<clang::NonTypeTemplateParmDecl>(param))
-                    {
-                        out += nttp->getType().getAsString(printPolicy);
-                        if (!nttp->getName().empty())
-                            out += " " + nttp->getName().str();
-
-                        if (nttp->hasDefaultArgument())
-                        {
-                            std::string defaultStr;
-                            llvm::raw_string_ostream defaultStream(defaultStr);
-                            nttp->getDefaultArgument().getArgument().getAsExpr()->printPretty(defaultStream, nullptr, printPolicy);
-                            out += "=" + defaultStr;
-                        }
-                    }
-                    else if (const auto* ttp2 = clang::dyn_cast<clang::TemplateTemplateParmDecl>(param))
-                    {
-                        out += "template<";
-                        const clang::TemplateParameterList* innerParams = ttp2->getTemplateParameters();
-                        bool first2 = true;
-                        for (const clang::NamedDecl* innerParam : *innerParams)
-                        {
-                            if (!first2)
-                                out += ", ";
-                            first2 = false;
-
-                            if (const auto* innerTtp = clang::dyn_cast<clang::TemplateTypeParmDecl>(innerParam))
-                                out += innerTtp->wasDeclaredWithTypename() ? "typename" : "class";
-                            else if (const auto* innerNttp = clang::dyn_cast<clang::NonTypeTemplateParmDecl>(innerParam))
-                            {
-                                out += innerNttp->getType().getAsString(printPolicy);
-                                if (!innerNttp->getName().empty())
-                                    out += " " + innerNttp->getName().str();
-                            }
-                        }
-                        out += "> class";
-                        if (!ttp2->getName().empty())
-                            out += " " + ttp2->getName().str();
-
-                        if (ttp2->hasDefaultArgument())
-                        {
-                            std::string defaultStr;
-                            llvm::raw_string_ostream defaultStream(defaultStr);
-                            ttp2->getDefaultArgument().getArgument().getAsTemplate().print(defaultStream, printPolicy);
-                            out += "=" + defaultStr;
-                        }
-                    }
-                }
-                out += "> ";
-            } else if (auto* CTSD = dyn_cast<ClassTemplateSpecializationDecl>(recordDecl))
+                out += ConstructTemplateParameterList(ctd->getTemplateParameters());
+            else if (auto* CTSD = dyn_cast<ClassTemplateSpecializationDecl>(recordDecl))
                 out += "template<> ";
             
             // struct/class/union keyword
@@ -843,9 +773,16 @@ namespace OdrCop2
                     std::istringstream iss(ConstructFunctionSignature(method, false));
                     for (std::string line; std::getline(iss, line); )
                         out += "   " + line + "\n";
-
                     continue;
                 }
+                if (const auto* funcTemplateDecl = dyn_cast<FunctionTemplateDecl>(decl))
+                {   // recurse but indent
+                    std::istringstream iss(ConstructFunctionSignature(funcTemplateDecl->getTemplatedDecl(), false));
+                    for (std::string line; std::getline(iss, line); )
+                        out += "   " + line + "\n";
+                    continue;
+                }
+
                 if (const auto* nested = clang::dyn_cast<clang::CXXRecordDecl>(decl))
                 {
                     if (nested->isInjectedClassName())
@@ -855,7 +792,6 @@ namespace OdrCop2
                     std::istringstream iss(ConstructRecordSignature(nested));
                     for (std::string line; std::getline(iss, line); )
                         out += "   " + line + "\n";
-
                     continue;
                 }
                 if (clang::isa<clang::IndirectFieldDecl>(decl))
@@ -871,14 +807,63 @@ namespace OdrCop2
                 {
                     const clang::CXXRecordDecl* templated = nestedTemplate->getTemplatedDecl();
                     if (!templated->isCompleteDefinition())
+                    {
+                        const clang::TemplateParameterList* params = nestedTemplate->getTemplateParameters();
+                        out += "   " + ConstructTemplateParameterList(params);
+                        out += templated->getKindName().str() + " ";
+                        out += nestedTemplate->getNameAsString() + ";\n";
                         continue;
+                    }
 
                     // recurse but indent
                     std::istringstream iss(ConstructRecordSignature(templated));
                     for (std::string line; std::getline(iss, line); )
                         out += "   " + line + "\n";
-
                     continue;
+                }
+
+                if (auto* friendDecl = dyn_cast<FriendDecl>(decl))
+                {
+                    if (auto* namedFriendDecl = friendDecl->getFriendDecl())
+                    {
+                        if (auto* funcDecl = dyn_cast<FunctionDecl>(namedFriendDecl))
+                        {   // recurse but indent
+                            std::istringstream iss(ConstructFunctionSignature(funcDecl, false));
+                            for (std::string line; std::getline(iss, line); )
+                                out += "   " + line + "\n";
+                            continue;
+                        }
+                        if (auto* funcTemplateDecl = dyn_cast<FunctionTemplateDecl>(namedFriendDecl))
+                        {   // recurse but indent
+                            std::istringstream iss(ConstructFunctionSignature(funcTemplateDecl->getTemplatedDecl(), false));
+                            for (std::string line; std::getline(iss, line); )
+                                out += "   " + line + "\n";
+                            continue;
+                        }
+                        if (auto* classTemplateDecl = dyn_cast<ClassTemplateDecl>(namedFriendDecl))
+                        {
+                            const auto* templated = classTemplateDecl->getTemplatedDecl();
+                            if (!templated->isCompleteDefinition())
+                            {
+                                const clang::TemplateParameterList* params = classTemplateDecl->getTemplateParameters();
+                                out += "   " + ConstructTemplateParameterList(params) + "friend ";
+                                out += templated->getKindName().str() + " ";
+                                out += classTemplateDecl->getQualifiedNameAsString() + ";\n";
+                                continue;
+                            }
+
+                            // recurse but indent
+                            std::istringstream iss(ConstructRecordSignature(templated));
+                            for (std::string line; std::getline(iss, line); )
+                                out += "   " + line + "\n";
+                            continue;
+                        }
+                    }
+                    if (auto* friendTypeSourceInfo = friendDecl->getFriendType())
+                    {
+                        out += "   friend " + friendTypeSourceInfo->getType().getAsString(printPolicy) + ";\n";
+                        continue;
+                    }
                 }
                     
                 { // unhandled
@@ -892,6 +877,80 @@ namespace OdrCop2
             }
 
             out += "};";
+            return out;
+        }
+        std::string ConstructTemplateParameterList(const clang::TemplateParameterList* params)
+        {
+            std::string out = "template<";
+
+            bool first = true;
+            for (const clang::NamedDecl* param : *params)
+            {
+                if (!first)
+                    out += ", ";
+                first = false;
+
+                if (const auto* ttp = clang::dyn_cast<clang::TemplateTypeParmDecl>(param))
+                {
+                    out += ttp->wasDeclaredWithTypename() ? "typename" : "class";
+                    if (!ttp->getName().empty())
+                        out += " " + ttp->getName().str();
+
+                    if (ttp->hasDefaultArgument())
+                    {
+                        clang::QualType defaultType = ttp->getDefaultArgument().getArgument().getAsType();
+                        out += "=";
+                        out += defaultType.getAsString(printPolicy);
+                    }
+                }
+                else if (const auto* nttp = clang::dyn_cast<clang::NonTypeTemplateParmDecl>(param))
+                {
+                    out += nttp->getType().getAsString(printPolicy);
+                    if (!nttp->getName().empty())
+                        out += " " + nttp->getName().str();
+
+                    if (nttp->hasDefaultArgument())
+                    {
+                        std::string defaultStr;
+                        llvm::raw_string_ostream defaultStream(defaultStr);
+                        nttp->getDefaultArgument().getArgument().getAsExpr()->printPretty(defaultStream, nullptr, printPolicy);
+                        out += "=" + defaultStr;
+                    }
+                }
+                else if (const auto* ttp2 = clang::dyn_cast<clang::TemplateTemplateParmDecl>(param))
+                {
+                    out += "template<";
+                    const clang::TemplateParameterList* innerParams = ttp2->getTemplateParameters();
+                    bool first2 = true;
+                    for (const clang::NamedDecl* innerParam : *innerParams)
+                    {
+                        if (!first2)
+                            out += ", ";
+                        first2 = false;
+
+                        if (const auto* innerTtp = clang::dyn_cast<clang::TemplateTypeParmDecl>(innerParam))
+                            out += innerTtp->wasDeclaredWithTypename() ? "typename" : "class";
+                        else if (const auto* innerNttp = clang::dyn_cast<clang::NonTypeTemplateParmDecl>(innerParam))
+                        {
+                            out += innerNttp->getType().getAsString(printPolicy);
+                            if (!innerNttp->getName().empty())
+                                out += " " + innerNttp->getName().str();
+                        }
+                    }
+                    out += "> class";
+                    if (!ttp2->getName().empty())
+                        out += " " + ttp2->getName().str();
+
+                    if (ttp2->hasDefaultArgument())
+                    {
+                        std::string defaultStr;
+                        llvm::raw_string_ostream defaultStream(defaultStr);
+                        ttp2->getDefaultArgument().getArgument().getAsTemplate().print(defaultStream, printPolicy);
+                        out += "=" + defaultStr;
+                    }
+                }
+            }
+            out += "> ";
             return out;
         }
         std::string EmitAnonymousNamespaceRecord(const clang::RecordDecl* innerDecl)
