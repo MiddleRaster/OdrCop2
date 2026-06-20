@@ -865,6 +865,17 @@ namespace OdrCop2
                         continue;
                     }
                 }
+
+                if (auto* typedefDecl = dyn_cast<TypedefDecl>(decl))
+                {
+                    out += "   typedef " + typedefDecl->getUnderlyingType().getAsString(printPolicy) + " " + typedefDecl->getNameAsString() + ";\n";
+                    continue;
+                }
+                if (auto* typeAliasDecl = dyn_cast<TypeAliasDecl>(decl))
+                {
+                    out += "   using " + typeAliasDecl->getNameAsString() + " = " + typeAliasDecl->getUnderlyingType().getAsString(printPolicy) + ";\n";
+                    continue;
+                }
                     
                 { // unhandled
                     out += "unhandled clang::Decl ";

@@ -560,28 +560,50 @@ Test ComprehensiveTests[] =
         {
             const auto& [violations, output] = RunTest( "struct DifferentTypedefTarget { typedef int  Alias; Alias value; };"
                                                     ,   "struct DifferentTypedefTarget { typedef long Alias; Alias value; };");
-            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual(2, violations, "wrong number of ODR violations");
             Assert::AreEqual("\n"
                             "ODR VIOLATION: DifferentTypedefTarget::Alias\n"
                             "[tu3.cpp]\n"
                             "DifferentTypedefTarget::Alias = int\n"
                             "[tu4.cpp]\n"
                             "DifferentTypedefTarget::Alias = long\n"
-                           , output);
+                            "\n"
+                            "ODR VIOLATION: DifferentTypedefTarget\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentTypedefTarget { // sizeof=4\n"
+                            "   typedef int Alias;\n"
+                            "   Alias value;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentTypedefTarget { // sizeof=4\n"
+                            "   typedef long Alias;\n"
+                            "   Alias value;\n"
+                            "};\n", output);
         }
     },
     {"TU34-029: Same external-linkage struct name, using-alias target differs. Expected ODR violation: YES.", []
         {
             const auto& [violations, output] = RunTest( "struct DifferentUsingAliasTarget { using Alias = int ; Alias value; };"
                                                     ,   "struct DifferentUsingAliasTarget { using Alias = long; Alias value; };");
-            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual(2, violations, "wrong number of ODR violations");
             Assert::AreEqual("\n"
                             "ODR VIOLATION: DifferentUsingAliasTarget::Alias\n"
                             "[tu3.cpp]\n"
                             "DifferentUsingAliasTarget::Alias = int\n"
                             "[tu4.cpp]\n"
                             "DifferentUsingAliasTarget::Alias = long\n"
-                           , output);
+                            "\n"
+                            "ODR VIOLATION: DifferentUsingAliasTarget\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentUsingAliasTarget { // sizeof=4\n"
+                            "   using Alias = int;\n"
+                            "   Alias value;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentUsingAliasTarget { // sizeof=4\n"
+                            "   using Alias = long;\n"
+                            "   Alias value;\n"
+                            "};\n", output);
         }
     },
     {"TU34-030: Same external-linkage class template specialization, identical definition. Expected ODR violation: NO.", []
@@ -1720,14 +1742,23 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
         {
             const auto& [violations, output] = RunTest ("struct SomeStructForTypedefTesting1 { int x1; }; struct EnclosingTypedefDefinition { typedef SomeStructForTypedefTesting1 SameTypedefDifferentUnderlyingType; };"
                                                       , "struct SomeStructForTypedefTesting2 { int x2; }; struct EnclosingTypedefDefinition { typedef SomeStructForTypedefTesting2 SameTypedefDifferentUnderlyingType; };");
-            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual(2, violations, "wrong number of ODR violations");
             Assert::AreEqual("\n"
                             "ODR VIOLATION: EnclosingTypedefDefinition::SameTypedefDifferentUnderlyingType\n"
                             "[tu3.cpp]\n"
                             "EnclosingTypedefDefinition::SameTypedefDifferentUnderlyingType = SomeStructForTypedefTesting1\n"
                             "[tu4.cpp]\n"
                             "EnclosingTypedefDefinition::SameTypedefDifferentUnderlyingType = SomeStructForTypedefTesting2\n"
-                          , output);
+                            "\n"
+                            "ODR VIOLATION: EnclosingTypedefDefinition\n"
+                            "[tu3.cpp]\n"
+                            "struct EnclosingTypedefDefinition { // sizeof=1\n"
+                            "   typedef SomeStructForTypedefTesting1 SameTypedefDifferentUnderlyingType;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct EnclosingTypedefDefinition { // sizeof=1\n"
+                            "   typedef SomeStructForTypedefTesting2 SameTypedefDifferentUnderlyingType;\n"
+                            "};\n", output);
         }
     },
     {"templated enum inside another template works", []
