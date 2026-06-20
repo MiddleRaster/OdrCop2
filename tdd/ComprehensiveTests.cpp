@@ -979,5 +979,94 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                             "};\n", output);
         }
     },
+    {"Same constexpr function but different bodies", []
+        {
+            const auto& [violations, output] = RunTest ("constexpr int SameConstexprFunctionDifferentBody() { return 1; }"
+                                                    ,   "constexpr int SameConstexprFunctionDifferentBody() { return 2; }");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation(s)");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: ?SameConstexprFunctionDifferentBody@@YAHXZ\n"
+                            "[tu3.cpp]\n"
+                            "constexpr int __cdecl SameConstexprFunctionDifferentBody() { return 1; }\n"
+                            "[tu4.cpp]\n"
+                            "constexpr int __cdecl SameConstexprFunctionDifferentBody() { return 2; }\n"
+                          , output);
+        }
+    },
+    {"Static const vs static constexpr", []
+        {
+            const auto& [violations, output] = RunTest ("struct DataMemberIsStaticConstOrStaticConstexpr { static const     int a = 1; };"
+                                                    ,   "struct DataMemberIsStaticConstOrStaticConstexpr { static constexpr int a = 1; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation(s)");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DataMemberIsStaticConstOrStaticConstexpr\n"
+                            "[tu3.cpp]\n"
+                            "struct DataMemberIsStaticConstOrStaticConstexpr { // sizeof=1\n"
+                            "   static const int a=1;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DataMemberIsStaticConstOrStaticConstexpr { // sizeof=1\n"
+                            "   constexpr static const int a=1;\n"
+                            "};\n", output);
+        }
+    },
+    {"Same template but different default template arguments", []
+        {
+            const auto& [violations, output] = RunTest ("template<typename T = char> struct SameTemplateDifferentDefaultTemplateArguments { T value; };"
+                                                    ,   "template<typename T = long> struct SameTemplateDifferentDefaultTemplateArguments { T value; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation(s)");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: SameTemplateDifferentDefaultTemplateArguments<>\n"
+                            "[tu3.cpp]\n"
+                            "template<typename T=char> struct SameTemplateDifferentDefaultTemplateArguments {\n"
+                            "   T value;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "template<typename T=long> struct SameTemplateDifferentDefaultTemplateArguments {\n"
+                            "   T value;\n"
+                            "};\n", output);
+        }
+    },
+    {"Same template but different default non-type template arguments", []
+        {
+            const auto& [violations, output] = RunTest ("template<int N=1> struct SameTemplateDifferentDefaultNTTP { int value; };"
+                                                       ,"template<int N=2> struct SameTemplateDifferentDefaultNTTP { int value; };");
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation(s)");
+            Assert::AreEqual("\n"
+                             "ODR VIOLATION: SameTemplateDifferentDefaultNTTP<>\n"
+                             "[tu3.cpp]\n"
+                             "template<int N=1> struct SameTemplateDifferentDefaultNTTP {\n"
+                             "   int value;\n"
+                             "};\n"
+                             "[tu4.cpp]\n"
+                             "template<int N=2> struct SameTemplateDifferentDefaultNTTP {\n"
+                             "   int value;\n"
+                             "};\n",
+                             output);
+        }
+    },
+    {"Same template but different default template-template parameters", []
+        {
+            const auto& [violations, output] = RunTest ("template<class> struct T1 {};"
+                                                        "template<template<class> class TT = T1>"
+                                                        "struct SameTemplateDifferentDefaultTTP { TT<int> value; };"
+                                                      , "template<class> struct T2 {};"
+                                                        "template<template<class> class TT = T2>"
+                                                        "struct SameTemplateDifferentDefaultTTP { TT<int> value; };");
+
+            Assert::AreEqual(1, violations, "there should be 1 ODR violation(s)");
+            Assert::AreEqual("\n"
+                             "ODR VIOLATION: SameTemplateDifferentDefaultTTP<>\n"
+                             "[tu3.cpp]\n"
+                             "template<template<class> class TT=T1> struct SameTemplateDifferentDefaultTTP {\n"
+                             "   TT<int> value;\n"
+                             "};\n"
+                             "[tu4.cpp]\n"
+                             "template<template<class> class TT=T2> struct SameTemplateDifferentDefaultTTP {\n"
+                             "   TT<int> value;\n"
+                             "};\n", output);
+        }
+    },
+
 
 };

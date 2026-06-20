@@ -616,12 +616,27 @@ namespace OdrCop2
                         out += ttp->wasDeclaredWithTypename() ? "typename" : "class";
                         if (!ttp->getName().empty())
                             out += " " + ttp->getName().str();
+
+                        if (ttp->hasDefaultArgument())
+                        {
+                            clang::QualType defaultType = ttp->getDefaultArgument().getArgument().getAsType();
+                            out += "=";
+                            out += defaultType.getAsString(printPolicy);
+                        }
                     }
                     else if (const auto* nttp = clang::dyn_cast<clang::NonTypeTemplateParmDecl>(param))
                     {
                         out += nttp->getType().getAsString(printPolicy);
                         if (!nttp->getName().empty())
                             out += " " + nttp->getName().str();
+
+                        if (nttp->hasDefaultArgument())
+                        {
+                            std::string defaultStr;
+                            llvm::raw_string_ostream defaultStream(defaultStr);
+                            nttp->getDefaultArgument().getArgument().getAsExpr()->printPretty(defaultStream, nullptr, printPolicy);
+                            out += "=" + defaultStr;
+                        }
                     }
                     else if (const auto* ttp2 = clang::dyn_cast<clang::TemplateTemplateParmDecl>(param))
                     {
@@ -646,6 +661,14 @@ namespace OdrCop2
                         out += "> class";
                         if (!ttp2->getName().empty())
                             out += " " + ttp2->getName().str();
+
+                        if (ttp2->hasDefaultArgument())
+                        {
+                            std::string defaultStr;
+                            llvm::raw_string_ostream defaultStream(defaultStr);
+                            ttp2->getDefaultArgument().getArgument().getAsTemplate().print(defaultStream, printPolicy);
+                            out += "=" + defaultStr;
+                        }
                     }
                 }
                 out += "> ";
