@@ -1067,6 +1067,713 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                              "};\n", output);
         }
     },
+    {"Same class but different inline-ness on method", []
+        {
+            const auto& [violations, output] = RunTest ("struct SameClassDifferentInlinenessOnFunction {              inline  void InlineOrNot() {} };"
+                                                      , "struct SameClassDifferentInlinenessOnFunction { __declspec(noinline) void InlineOrNot() {} };");
+            Assert::AreEqual(2, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: ?InlineOrNot@SameClassDifferentInlinenessOnFunction@@QEAAXXZ\n"
+                            "[tu3.cpp]\n"
+                            "inline void __cdecl SameClassDifferentInlinenessOnFunction::InlineOrNot() {}\n"
+                            "[tu4.cpp]\n"
+                            "__declspec(noinline) void __cdecl SameClassDifferentInlinenessOnFunction::InlineOrNot() {}\n"
+                            "\n"
+                            "ODR VIOLATION: SameClassDifferentInlinenessOnFunction\n"
+                            "[tu3.cpp]\n"
+                            "struct SameClassDifferentInlinenessOnFunction { // sizeof=1\n"
+                            "   inline void __cdecl InlineOrNot() {}\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct SameClassDifferentInlinenessOnFunction { // sizeof=1\n"
+                            "   __declspec(noinline) void __cdecl InlineOrNot() {}\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class but with different constexpr-ness on method", []
+        {
+            const auto& [violations, output] = RunTest ("struct SameClassDifferentConstexpressOnFunction { constexpr void ConstexpreOrNot() {} };"
+                                                      , "struct SameClassDifferentConstexpressOnFunction {           void ConstexpreOrNot() {} };");
+            Assert::AreEqual(2, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: ?ConstexpreOrNot@SameClassDifferentConstexpressOnFunction@@QEAAXXZ\n"
+                            "[tu3.cpp]\n"
+                            "constexpr void __cdecl SameClassDifferentConstexpressOnFunction::ConstexpreOrNot() {}\n"
+                            "[tu4.cpp]\n"
+                            "void __cdecl SameClassDifferentConstexpressOnFunction::ConstexpreOrNot() {}\n"
+                            "\n"
+                            "ODR VIOLATION: SameClassDifferentConstexpressOnFunction\n"
+                            "[tu3.cpp]\n"
+                            "struct SameClassDifferentConstexpressOnFunction { // sizeof=1\n"
+                            "   constexpr void __cdecl ConstexpreOrNot() {}\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct SameClassDifferentConstexpressOnFunction { // sizeof=1\n"
+                            "   void __cdecl ConstexpreOrNot() {}\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class but different final/override usage. These change the virtual table.", []
+        {
+            const auto& [violations, output] = RunTest ("struct BaseForOverride { virtual void OverrideOrNot() {} };"
+                                                        "struct SameClassDifferentOverrideSpecifier : BaseForOverride { void OverrideOrNot() override {} };"
+                                                      , "struct BaseForOverride { virtual void OverrideOrNot() {} };"
+                                                        "struct SameClassDifferentOverrideSpecifier : BaseForOverride { void OverrideOrNot() {} };");
+            Assert::AreEqual(2, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: ?OverrideOrNot@SameClassDifferentOverrideSpecifier@@UEAAXXZ\n"
+                            "[tu3.cpp]\n"
+                            "void __cdecl SameClassDifferentOverrideSpecifier::OverrideOrNot() override override {}\n"
+                            "[tu4.cpp]\n"
+                            "void __cdecl SameClassDifferentOverrideSpecifier::OverrideOrNot() {}\n"
+                            "\n"
+                            "ODR VIOLATION: SameClassDifferentOverrideSpecifier\n"
+                            "[tu3.cpp]\n"
+                            "struct SameClassDifferentOverrideSpecifier : public BaseForOverride { // sizeof=8\n"
+                            "   void __cdecl OverrideOrNot() override override {}\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct SameClassDifferentOverrideSpecifier : public BaseForOverride { // sizeof=8\n"
+                            "   void __cdecl OverrideOrNot() {}\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class but different noexcept on member functions", []
+        {
+            const auto& [violations, output] = RunTest ("struct SameClassDifferentNoExceptOnMethod { void NoExceptMethod() noexcept {} };"
+                                                      , "struct SameClassDifferentNoExceptOnMethod { void NoExceptMethod()          {} };");
+            Assert::AreEqual(2, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: ?NoExceptMethod@SameClassDifferentNoExceptOnMethod@@QEAAXXZ\n"
+                            "[tu3.cpp]\n"
+                            "void __cdecl SameClassDifferentNoExceptOnMethod::NoExceptMethod() noexcept {}\n"
+                            "[tu4.cpp]\n"
+                            "void __cdecl SameClassDifferentNoExceptOnMethod::NoExceptMethod() {}\n"
+                            "\n"
+                            "ODR VIOLATION: SameClassDifferentNoExceptOnMethod\n"
+                            "[tu3.cpp]\n"
+                            "struct SameClassDifferentNoExceptOnMethod { // sizeof=1\n"
+                            "   void __cdecl NoExceptMethod() noexcept {}\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct SameClassDifferentNoExceptOnMethod { // sizeof=1\n"
+                            "   void __cdecl NoExceptMethod() {}\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class name but differently sized data-member", []
+        {
+            const auto& [violations, output] = RunTest ("struct DifferentSizedMember { char a; };"
+                                                      , "struct DifferentSizedMember { wchar_t* a; };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentSizedMember\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentSizedMember { // sizeof=1\n"
+                            "   char a;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentSizedMember { // sizeof=8\n"
+                            "   wchar_t *a;\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class name but extra data-member", []
+        {
+            const auto& [violations, output] = RunTest ("struct DifferentDataMembers { int a; };"
+                                                      , "struct DifferentDataMembers { int a; int b; };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentDataMembers\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentDataMembers { // sizeof=4\n"
+                            "   int a;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentDataMembers { // sizeof=8\n"
+                            "   int a;\n"
+                            "   int b;\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class name but data-members in different order", []
+        {
+            const auto& [violations, output] = RunTest ("struct DifferentOrderOfDataMembers { int a, b; };"
+                                                      , "struct DifferentOrderOfDataMembers { int b, a; };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentOrderOfDataMembers\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentOrderOfDataMembers { // sizeof=8\n"
+                            "   int a;\n"
+                            "   int b;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentOrderOfDataMembers { // sizeof=8\n"
+                            "   int b;\n"
+                            "   int a;\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class name but different type of data-members", []
+        {
+            const auto& [violations, output] = RunTest ("struct DifferentTypeOfDataMembers {   signed a; };"
+                                                      , "struct DifferentTypeOfDataMembers { unsigned a; };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentTypeOfDataMembers\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentTypeOfDataMembers { // sizeof=4\n"
+                            "   int a;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentTypeOfDataMembers { // sizeof=4\n"
+                            "   unsigned int a;\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class name but data-members are pointers to different types", []
+        {
+            const auto& [violations, output] = RunTest ("struct StructContainingPointerToDifferentTypes { char * ptr; };"
+                                                      , "struct StructContainingPointerToDifferentTypes { int  * ptr; };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: StructContainingPointerToDifferentTypes\n"
+                            "[tu3.cpp]\n"
+                            "struct StructContainingPointerToDifferentTypes { // sizeof=8\n"
+                            "   char *ptr;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct StructContainingPointerToDifferentTypes { // sizeof=8\n"
+                            "   int *ptr;\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class but different data-member access specifiers", []
+        {
+            const auto& [violations, output] = RunTest ("struct SameClassDifferentDataMemberAccessSpecifier { public:  int a; };"
+                                                      , "struct SameClassDifferentDataMemberAccessSpecifier { private: int a; };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: SameClassDifferentDataMemberAccessSpecifier\n"
+                            "[tu3.cpp]\n"
+                            "struct SameClassDifferentDataMemberAccessSpecifier { // sizeof=4\n"
+                            "public:\n"
+                            "   int a;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct SameClassDifferentDataMemberAccessSpecifier { // sizeof=4\n"
+                            "private:\n"
+                            "   int a;\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class name but different base", []
+        {
+            const auto& [violations, output] = RunTest ("struct Base1 {}; struct DifferentBases : Base1 {};"
+                                                      , "struct Base2 {}; struct DifferentBases : Base2 {};");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentBases\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentBases : public Base1 { // sizeof=1\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentBases : public Base2 { // sizeof=1\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class name but base classes in different order", []
+        {
+            const auto& [violations, output] = RunTest ("struct Base1{}; struct Base2{}; struct BaseClassesInDifferentOrder : Base1, Base2 {};"
+                                                      , "struct Base1{}; struct Base2{}; struct BaseClassesInDifferentOrder : Base2, Base1 {};");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: BaseClassesInDifferentOrder\n"
+                            "[tu3.cpp]\n"
+                            "struct BaseClassesInDifferentOrder : public Base1, public Base2 { // sizeof=1\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct BaseClassesInDifferentOrder : public Base2, public Base1 { // sizeof=1\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class name but base is either virtual or not", []
+        {
+            const auto& [violations, output] = RunTest ("struct Base1{}; struct BaseClassVirtualOrNot : virtual Base1 {};"
+                                                      , "struct Base1{}; struct BaseClassVirtualOrNot :         Base1 {};");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: BaseClassVirtualOrNot\n"
+                            "[tu3.cpp]\n"
+                            "struct BaseClassVirtualOrNot : public virtual Base1 { // sizeof=8\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct BaseClassVirtualOrNot : public Base1 { // sizeof=1\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class name but different Access specifiers on base class", []
+        {
+            const auto& [violations, output] = RunTest ("struct Base1 {}; struct DifferentAccessSpecifiersOnBaseClass : public  Base1 {};"
+                                                      , "struct Base1 {}; struct DifferentAccessSpecifiersOnBaseClass : private Base1 {};");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentAccessSpecifiersOnBaseClass\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentAccessSpecifiersOnBaseClass : public Base1 { // sizeof=1\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentAccessSpecifiersOnBaseClass : private Base1 { // sizeof=1\n"
+                            "};\n", output);
+        }
+    },
+    {"Same name but different access specifiers on method", []
+        {
+            const auto& [violations, output] = RunTest ("struct DifferentAccessSpecifiersOnMethod { public:  void Foo() {} };"
+                                                      , "struct DifferentAccessSpecifiersOnMethod { private: void Foo() {} };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentAccessSpecifiersOnMethod\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentAccessSpecifiersOnMethod { // sizeof=1\n"
+                            "public:\n"
+                            "   void __cdecl Foo() {}\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentAccessSpecifiersOnMethod { // sizeof=1\n"
+                            "private:\n"
+                            "   void __cdecl Foo() {}\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class but different member types", []
+        {
+            const auto& [violations, output] = RunTest ("struct DifferentDataMemberType { char a; };"
+                                                      , "struct DifferentDataMemberType { long a; };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentDataMemberType\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentDataMemberType { // sizeof=1\n"
+                            "   char a;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentDataMemberType { // sizeof=4\n"
+                            "   long a;\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class but different member order", []
+        {
+            const auto& [violations, output] = RunTest ("struct SameMemberTypesDifferentOrder { int a; char b; };"
+                                                      , "struct SameMemberTypesDifferentOrder { char b; int a; };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: SameMemberTypesDifferentOrder\n"
+                            "[tu3.cpp]\n"
+                            "struct SameMemberTypesDifferentOrder { // sizeof=8\n"
+                            "   int a;\n"
+                            "   char b;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct SameMemberTypesDifferentOrder { // sizeof=8\n"
+                            "   char b;\n"
+                            "   int a;\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class but different base classes", []
+        {
+            const auto& [violations, output] = RunTest ("struct Base1{}; struct DifferentBaseClass : Base1 {};"
+                                                      , "                struct DifferentBaseClass         {};");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentBaseClass\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentBaseClass : public Base1 { // sizeof=1\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentBaseClass { // sizeof=1\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class but different const-ness on data-member", []
+        {
+            const auto& [violations, output] = RunTest ("struct DifferentConstDataMember { const int a{}; };"
+                                                      , "struct DifferentConstDataMember {       int a{}; };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentConstDataMember\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentConstDataMember { // sizeof=4\n"
+                            "   const int a{};\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentConstDataMember { // sizeof=4\n"
+                            "   int a{};\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class name but different Volatility on data-member", []
+        {
+            const auto& [violations, output] = RunTest ("struct DifferentVolatileDataMember { volatile int a{}; }; "
+                                                      , "struct DifferentVolatileDataMember {          int a{}; }; ");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentVolatileDataMember\n"
+                            "[tu3.cpp]\n"
+                            "struct DifferentVolatileDataMember { // sizeof=4\n"
+                            "   volatile int a{};\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct DifferentVolatileDataMember { // sizeof=4\n"
+                            "   int a{};\n"
+                            "};\n", output);
+        }
+    },
+    {"Same name but different kind: class vs. struct", []
+        {
+            const auto& [violations, output] = RunTest ("struct StructVsClass {};"
+                                                      , "class  StructVsClass {};");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: StructVsClass\n"
+                            "[tu3.cpp]\n"
+                            "struct StructVsClass { // sizeof=1\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "class StructVsClass { // sizeof=1\n"
+                            "};\n", output);
+        }
+    },
+    {"Same inline function but different bodies. Inline functions must be bit‑for‑bit identical across TUs.", []
+        {
+            const auto& [violations, output] = RunTest ("inline int FunctionsMustBeBitwiseIdentical() { return 1; }"
+                                                      , "inline int FunctionsMustBeBitwiseIdentical() { return 2; }");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: ?FunctionsMustBeBitwiseIdentical@@YAHXZ\n"
+                            "[tu3.cpp]\n"
+                            "inline int __cdecl FunctionsMustBeBitwiseIdentical() { return 1; }\n"
+                            "[tu4.cpp]\n"
+                            "inline int __cdecl FunctionsMustBeBitwiseIdentical() { return 2; }\n"
+                          , output);
+        }
+    },
+    {"Same template specialization but different definitions", []
+        {
+            const auto& [violations, output] = RunTest ("template<typename T> inline T   SameFunctionTemplateSpecializationDifferentDefinitions();"
+                                                        "template<          > inline int SameFunctionTemplateSpecializationDifferentDefinitions<int>() { return 1; }"
+                                                      , "template<typename T> inline T   SameFunctionTemplateSpecializationDifferentDefinitions();"
+                                                        "template<          > inline int SameFunctionTemplateSpecializationDifferentDefinitions<int>() { return 2; }");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: ??$SameFunctionTemplateSpecializationDifferentDefinitions@H@@YAHXZ\n"
+                            "[tu3.cpp]\n"
+                            "inline int __cdecl SameFunctionTemplateSpecializationDifferentDefinitions<int>() { return 1; }\n"
+                            "[tu4.cpp]\n"
+                            "inline int __cdecl SameFunctionTemplateSpecializationDifferentDefinitions<int>() { return 2; }\n"
+                          , output);
+        }
+    },
+    {"Same enum name but different values on enumerators", []
+        {
+            const auto& [violations, output] = RunTest ("enum SameEnumButDifferentValues { A = 1, B = 2 };"
+                                                      , "enum SameEnumButDifferentValues { A = 1, B = 3 };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: SameEnumButDifferentValues\n"
+                            "[tu3.cpp]\n"
+                            "enum SameEnumButDifferentValues { A=1, B=2 };\n"
+                            "[tu4.cpp]\n"
+                            "enum SameEnumButDifferentValues { A=1, B=3 };\n"
+                          , output);
+        }
+    },
+    {"Same class name but different alignment", []
+        {
+            const auto& [violations, output] = RunTest ("#pragma warning(push)\n"
+                                                        "#pragma warning(disable: 4324)\n"
+                                                        "struct alignas(4) SameClassDifferentAlignment { int a; };\n"
+                                                        "#pragma warning(pop)\n"
+                                                      , "#pragma warning(push)\n"
+                                                        "#pragma warning(disable: 4324)\n"
+                                                        "struct alignas(8) SameClassDifferentAlignment { int a; };\n"
+                                                        "#pragma warning(pop)\n");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: SameClassDifferentAlignment\n"
+                            "[tu3.cpp]\n"
+                            "struct alignas(4) SameClassDifferentAlignment { // sizeof=4\n"
+                            "   int a;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct alignas(8) SameClassDifferentAlignment { // sizeof=8\n"
+                            "   int a;\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class but different virtual function table shape", []
+        {
+            const auto& [violations, output] = RunTest ("struct SameClassDifferentVirtualFunctionTableShape { virtual void f() {} };"
+                                                      , "struct SameClassDifferentVirtualFunctionTableShape {};");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: SameClassDifferentVirtualFunctionTableShape\n"
+                            "[tu3.cpp]\n"
+                            "struct SameClassDifferentVirtualFunctionTableShape { // sizeof=8\n"
+                            "   virtual void __cdecl f() {}\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct SameClassDifferentVirtualFunctionTableShape { // sizeof=1\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class name but different virtual function names", []
+        {
+            const auto& [violations, output] = RunTest ("struct SameClassDifferentVirtualFunctionNames { virtual void Foo() {} };"
+                                                      , "struct SameClassDifferentVirtualFunctionNames { virtual void Bar() {} };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: SameClassDifferentVirtualFunctionNames\n"
+                            "[tu3.cpp]\n"
+                            "struct SameClassDifferentVirtualFunctionNames { // sizeof=8\n"
+                            "   virtual void __cdecl Foo() {}\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct SameClassDifferentVirtualFunctionNames { // sizeof=8\n"
+                            "   virtual void __cdecl Bar() {}\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class name but different virtualness on method", []
+        {
+            const auto& [violations, output] = RunTest ("struct SameClassDifferentVirtualnessOnFunction { virtual void VirtualOrNot() {} };"
+                                                      , "struct SameClassDifferentVirtualnessOnFunction {         void VirtualOrNot() {} };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: SameClassDifferentVirtualnessOnFunction\n"
+                            "[tu3.cpp]\n"
+                            "struct SameClassDifferentVirtualnessOnFunction { // sizeof=8\n"
+                            "   virtual void __cdecl VirtualOrNot() {}\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct SameClassDifferentVirtualnessOnFunction { // sizeof=1\n"
+                            "   void __cdecl VirtualOrNot() {}\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class name but one has static method, the other does not", []
+        {
+            const auto& [violations, output] = RunTest ("struct StaticFunctionOrMethod { static void Foo() {} };"
+                                                      , "struct StaticFunctionOrMethod {        void Foo() {} };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: StaticFunctionOrMethod\n"
+                            "[tu3.cpp]\n"
+                            "struct StaticFunctionOrMethod { // sizeof=1\n"
+                            "   static void __cdecl Foo() {}\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct StaticFunctionOrMethod { // sizeof=1\n"
+                            "   void __cdecl Foo() {}\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class but one member is static vs non‑static", []
+        {
+            const auto& [violations, output] = RunTest ("struct SameClassDifferentStaticOnDataMember { static int a; };"
+                                                      , "struct SameClassDifferentStaticOnDataMember {        int a; };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: SameClassDifferentStaticOnDataMember\n"
+                            "[tu3.cpp]\n"
+                            "struct SameClassDifferentStaticOnDataMember { // sizeof=1\n"
+                            "   static int a;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct SameClassDifferentStaticOnDataMember { // sizeof=4\n"
+                            "   int a;\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class name but one member is static const, the other only const", []
+        {
+            const auto& [violations, output] = RunTest ("struct SameClassDifferentStaticConstOnDataMember { static const int a; };"
+                                                      , "struct SameClassDifferentStaticConstOnDataMember { static       int a; };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: SameClassDifferentStaticConstOnDataMember\n"
+                            "[tu3.cpp]\n"
+                            "struct SameClassDifferentStaticConstOnDataMember { // sizeof=1\n"
+                            "   static const int a;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct SameClassDifferentStaticConstOnDataMember { // sizeof=1\n"
+                            "   static int a;\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class name but one member is static volatile, the other only static", []
+        {
+            const auto& [violations, output] = RunTest ("struct SameClassDifferentStaticVolatileOnDataMember { static volatile int a; };"
+                                                      , "struct SameClassDifferentStaticVolatileOnDataMember { static          int a; };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: SameClassDifferentStaticVolatileOnDataMember\n"
+                            "[tu3.cpp]\n"
+                            "struct SameClassDifferentStaticVolatileOnDataMember { // sizeof=1\n"
+                            "   static volatile int a;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct SameClassDifferentStaticVolatileOnDataMember { // sizeof=1\n"
+                            "   static int a;\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class but different bitfield layout", []
+        {
+            const auto& [violations, output] = RunTest ("struct SameClassDifferentBitfieldLayout { unsigned a : 3; unsigned b : 5; };"
+                                                      , "struct SameClassDifferentBitfieldLayout { unsigned a : 4; unsigned b : 4; };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: SameClassDifferentBitfieldLayout\n"
+                            "[tu3.cpp]\n"
+                            "struct SameClassDifferentBitfieldLayout { // sizeof=4\n"
+                            "   unsigned int a : 3;\n"
+                            "   unsigned int b : 5;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct SameClassDifferentBitfieldLayout { // sizeof=4\n"
+                            "   unsigned int a : 4;\n"
+                            "   unsigned int b : 4;\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class but different member order inside anonymous struct/union", []
+        {
+            const auto& [violations, output] = RunTest ("#pragma warning(push)\n"
+                                                        "#pragma warning(disable: 4201)\n"
+                                                        "struct SameClassButDifferentMemberOrderInsideAnonmousStructAndUnion { union { struct { int a; int b; }; int x; }; };\n"
+                                                        "#pragma warning(pop)\n"
+                                                      , "#pragma warning(push)\n"
+                                                        "#pragma warning(disable: 4201)\n"
+                                                        "struct SameClassButDifferentMemberOrderInsideAnonmousStructAndUnion { union { struct { int b; int a; }; int x; }; };\n"
+                                                        "#pragma warning(pop)\n");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: SameClassButDifferentMemberOrderInsideAnonmousStructAndUnion\n"
+                            "[tu3.cpp]\n"
+                            "struct SameClassButDifferentMemberOrderInsideAnonmousStructAndUnion { // sizeof=8\n"
+                            "   union  { // sizeof=8\n"
+                            "      struct  { // sizeof=8\n"
+                            "         int a;\n"
+                            "         int b;\n"
+                            "      };\n"
+                            "      int x;\n"
+                            "   };\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct SameClassButDifferentMemberOrderInsideAnonmousStructAndUnion { // sizeof=8\n"
+                            "   union  { // sizeof=8\n"
+                            "      struct  { // sizeof=8\n"
+                            "         int b;\n"
+                            "         int a;\n"
+                            "      };\n"
+                            "      int x;\n"
+                            "   };\n"
+                            "};\n", output);
+        }
+    },
+    {"Same class but different presence/absence of anonymous members", []
+        {
+            const auto& [violations, output] = RunTest ("#pragma warning(push)\n"
+                                                        "#pragma warning(disable: 4201)\n"
+                                                        "struct SameClassDifferentPresenceOfAnonymousMembers { union { int a; struct { int b; }; }; };\n"
+                                                        "#pragma warning(pop)\n"
+                                                      , "#pragma warning(push)\n"
+                                                        "#pragma warning(disable: 4201)\n"
+                                                        "struct SameClassDifferentPresenceOfAnonymousMembers { union { int a;                    }; };\n"
+                                                        "#pragma warning(pop)\n");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: SameClassDifferentPresenceOfAnonymousMembers\n"
+                            "[tu3.cpp]\n"
+                            "struct SameClassDifferentPresenceOfAnonymousMembers { // sizeof=4\n"
+                            "   union  { // sizeof=4\n"
+                            "      int a;\n"
+                            "      struct  { // sizeof=4\n"
+                            "         int b;\n"
+                            "      };\n"
+                            "   };\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct SameClassDifferentPresenceOfAnonymousMembers { // sizeof=4\n"
+                            "   union  { // sizeof=4\n"
+                            "      int a;\n"
+                            "   };\n"
+                            "};\n", output);
+        }
+    },
+    {"Same typedef or using but different underlying type", []
+        {
+            const auto& [violations, output] = RunTest ("struct SomeStructForTypedefTesting1 { int x1; }; struct EnclosingTypedefDefinition { typedef SomeStructForTypedefTesting1 SameTypedefDifferentUnderlyingType; };"
+                                                      , "struct SomeStructForTypedefTesting2 { int x2; }; struct EnclosingTypedefDefinition { typedef SomeStructForTypedefTesting2 SameTypedefDifferentUnderlyingType; };");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: EnclosingTypedefDefinition::SameTypedefDifferentUnderlyingType\n"
+                            "[tu3.cpp]\n"
+                            "EnclosingTypedefDefinition::SameTypedefDifferentUnderlyingType = SomeStructForTypedefTesting1\n"
+                            "[tu4.cpp]\n"
+                            "EnclosingTypedefDefinition::SameTypedefDifferentUnderlyingType = SomeStructForTypedefTesting2\n"
+                          , output);
+        }
+    },
+    {"templated enum inside another template works", []
+        {
+            const auto& [violations, output] = RunTest ("template<typename Outer> struct NamelessEnum { template<typename T> struct Inner { enum { value = sizeof(T) == sizeof(char) ? 1 : 0 }; }; };"
+                                                        "NamelessEnum<int>::Inner<char> g_1_instance;"
+                                                      , "template<typename Outer> struct NamelessEnum { template<typename T> struct Inner { enum { value = sizeof(T) == sizeof(char) ? 1 : 0 }; }; };"
+                                                        "NamelessEnum<int>::Inner<long> g_2_instance;");
+            Assert::AreEqual(0, violations, "wrong number of ODR violations");
+            Assert::AreEqual("", output);
+        }
+    },
+
+
+
+
+
+
+
+
 
 
 };
+#ifdef KEEP
+    {"
+        
+        
+        ", []
+        {
+            const auto& [violations, output] = RunTest ("
+                
+                
+                "
+                                                      , "
+                
+                
+                ");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+
+
+
+
+
+                            "};\n", output);
+        }
+    },
+
+#endif

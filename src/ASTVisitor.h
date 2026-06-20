@@ -143,7 +143,14 @@ namespace OdrCop2
             while (declContext && !declContext->isTranslationUnit())
             {
                 if (const auto* recordDecl = llvm::dyn_cast<clang::RecordDecl>(declContext))
-                    parent = recordDecl->getNameAsString() + "::" + parent;
+                {
+                    std::string name;
+                    if (const auto* ctsd = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(recordDecl))
+                        name = ctsd->getNameAsString() + TemplateArgsToString(ctsd->getTemplateArgs()); // include template instantiations
+                    else
+                        name = recordDecl->getNameAsString();
+                    parent = name + "::" + parent;
+                }
                 else if (const auto* namespaceDecl = llvm::dyn_cast<clang::NamespaceDecl>(declContext))
                 {
                     if (!namespaceDecl->isAnonymousNamespace())
@@ -860,6 +867,20 @@ namespace OdrCop2
                     continue;
                 }
 
+                if (const auto* nestedTemplate = clang::dyn_cast<clang::ClassTemplateDecl>(decl))
+                {
+                    const clang::CXXRecordDecl* templated = nestedTemplate->getTemplatedDecl();
+                    if (!templated->isCompleteDefinition())
+                        continue;
+
+                    // recurse but indent
+                    std::istringstream iss(ConstructRecordSignature(templated));
+                    for (std::string line; std::getline(iss, line); )
+                        out += "   " + line + "\n";
+
+                    continue;
+                }
+                    
                 { // unhandled
                     out += "unhandled clang::Decl ";
                     out += decl->getDeclKindName();
