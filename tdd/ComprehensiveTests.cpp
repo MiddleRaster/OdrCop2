@@ -9,8 +9,8 @@ using namespace TDD20;
 std::pair<int,std::string> RunTest(const std::string& code1, const std::string& code2)
 {
     OdrCop2::AllMaps maps;
-    Assert::IsTrue(clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++", "-std=c++23" }, "tu3.cpp"));
-    Assert::IsTrue(clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++", "-std=c++23" }, "tu4.cpp"));
+    Assert::IsTrue(clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, { "-x", "c++", "-std=c++23" }, "tu3.cpp"), "compiler error");
+    Assert::IsTrue(clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code2, { "-x", "c++", "-std=c++23" }, "tu4.cpp"), "compiler error");
 
     std::ostringstream oss;
     int violations = OdrCop2::OdrViolationReporter::ReportOdrViolations(maps, oss);
@@ -706,11 +706,15 @@ Test ComprehensiveTests[] =
                             "ODR VIOLATION: ExternalCarrierOfInternalType\n"
                             "[tu3.cpp]\n"
                             "struct ExternalCarrierOfInternalType { // sizeof=4\n"
-                            "   const struct (anonymous namespace)::InternalPartForExternalCarrier { int x; } part;\n"
+                            "   const struct (anonymous namespace)::InternalPartForExternalCarrier { // sizeof=4\n"
+                            "      int x;\n"
+                            "   } part;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct ExternalCarrierOfInternalType { // sizeof=4\n"
-                            "   const struct (anonymous namespace)::InternalPartForExternalCarrier { unsigned int y; } part;\n"
+                            "   const struct (anonymous namespace)::InternalPartForExternalCarrier { // sizeof=4\n"
+                            "      unsigned int y;\n"
+                            "   } part;\n"
                             "};\n", output);
         }
     },
@@ -2145,7 +2149,46 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
             Assert::AreEqual(0, violations, "wrong number of ODR violations");
         }
     },
-
+    //{"Mocking callable works", [] // no, it doesn't; I get:  "tu3.cpp:2:64: error: cannot mangle this pack expansion yet" which is a real bummer, because I use that a lot for TBCI
+    //    {
+    //        const auto& [violations, output] = RunTest ("#include <utility>\n"
+    //                              "template<auto Fn> struct Callable { template<typename... Args> decltype(auto) operator()(Args&&... args) const { return Fn(std::forward<Args>(args)...); } };"
+    //                                                  , "#include <utility>\n"
+    //                              "template<auto Fn> struct Callable { template<typename... Args> decltype(auto) operator()(Args&&... args) const { return Fn(std::forward<Args>(args)...); } };");
+    //        Assert::AreEqual("", output);
+    //        Assert::AreEqual(0, violations, "wrong number of ODR violations");
+    //    }
+    //},
+    {"Top-level anonymous type, different layouts. OdrCop2 should NOT flag", []
+        {
+            const auto& [violations, output] = RunTest ("namespace Tests { namespace T1 { namespace { struct Empty { int x;    }; } Empty t1_instance; } }"
+                                                      , "namespace Tests { namespace T1 { namespace { struct Empty { double y; }; } Empty t1_instance; } }");
+            Assert::AreEqual("", output);
+            Assert::AreEqual(0, violations, "wrong number of ODR violations");
+        }
+    },
+    {"Anonymous type inside external-linkage struct, different layouts. OdrCop2 SHOULD flag", []
+        {
+            const auto& [violations, output] = RunTest ("namespace T2 { namespace { struct Helper {          int x; ~Helper() {} }; } struct Public { Helper h; }; }"
+                                                      , "namespace T2 { namespace { struct Helper { unsigned int y;              }; } struct Public { Helper h; }; }");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: T2::Public\n"
+                            "[tu3.cpp]\n"
+                            "struct T2::Public { // sizeof=4\n"
+                            "   struct T2::(anonymous namespace)::Helper { // sizeof=4\n"
+                            "      int x;\n"
+                            "      void __cdecl ~Helper() {}\n"
+                            "   } h;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct T2::Public { // sizeof=4\n"
+                            "   struct T2::(anonymous namespace)::Helper { // sizeof=4\n"
+                            "      unsigned int y;\n"
+                            "   } h;\n"
+                            "};\n", output);
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+        }
+    },
 
 
 

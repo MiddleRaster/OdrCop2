@@ -768,11 +768,21 @@ namespace OdrCop2
                             clang::Qualifiers quals = field->getType().getQualifiers();
                             if (quals.hasConst())    out += "const ";
                             if (quals.hasVolatile()) out += "volatile ";
-
                             out += ConstructAttributes(field);
-                            out += EmitAnonymousNamespaceRecord(recordType->getDecl());
-                            out += " ";
-                            out += field->getNameAsString();
+                         
+                            // recurse but indent
+                            std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
+                            bool first=true;
+                            for (std::string line; std::getline(iss, line);)
+                            {
+                                if (first) {
+                                    first = false;
+                                    out +=         line + "\n"; // the first line is already indented
+                                } else
+                                    out += "   " + line + "\n";
+                            }
+                            out  = out.substr(0, out.size()-2); // strip off last ";\n"
+                            out += " " + field->getNameAsString();
                         }
                         else if (const auto* enumTy = llvm::dyn_cast<clang::EnumType>(type); enumTy && !enumTy->getDecl()->getIdentifier())
                         {
@@ -1039,54 +1049,7 @@ namespace OdrCop2
             out += "> ";
             return out;
         }
-        std::string EmitAnonymousNamespaceRecord(const clang::RecordDecl* innerDecl)
-        {
-            std::string out;
 
-            out += innerDecl->getKindName().str() + " ";
-            out += innerDecl->getQualifiedNameAsString();
-            out += " { ";
-            for (const clang::FieldDecl* innerField : innerDecl->fields())
-            {
-                const clang::Type* innerType = innerField->getType().getCanonicalType().getTypePtr();
-                const auto*  innerRecordType = clang::dyn_cast<clang::RecordType>(innerType);
-                if (innerRecordType && innerRecordType->getDecl()->isInAnonymousNamespace())
-                {
-                    clang::Qualifiers quals = innerField->getType().getQualifiers();
-                    if (quals.hasConst())    out += "const ";
-                    if (quals.hasVolatile()) out += "volatile ";
-
-                    out += ConstructAttributes(innerField);
-                    out += EmitAnonymousNamespaceRecord(innerRecordType->getDecl());
-                    out += " ";
-                    out += innerField->getNameAsString();
-                }
-                else
-                {
-                    std::string              innerFieldStr;
-                    llvm::raw_string_ostream os(innerFieldStr);
-                    innerField->getType().print(os, printPolicy, innerField->getNameAsString());
-                    os.flush();
-                    out += innerFieldStr;
-                }
-
-                if (innerField->isBitField())
-                {
-                    std::string              bitWidth;
-                    llvm::raw_string_ostream os(bitWidth);
-                    innerField->getBitWidth()->printPretty(os, nullptr, printPolicy);
-                    os.flush();
-                    out += " : " + bitWidth;
-                }
-
-                if (innerField->hasInClassInitializer())
-                    out += AddClassInitializer(innerField);
-
-                out += "; ";
-            }
-            out += "}";
-            return out;
-        }
         std::string AddClassInitializer(const clang::FieldDecl* fieldDecl)
         {
             std::string out;
