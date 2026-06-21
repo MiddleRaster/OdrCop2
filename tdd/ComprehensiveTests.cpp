@@ -920,14 +920,8 @@ Test ComprehensiveTests[] =
         {
             const auto& [violations, output] = RunTest( "inline int DifferentLambdaUser(int x) { auto lambda = [](int y) { return y + 50; }; return lambda(x); }"
                                                     ,   "inline int DifferentLambdaUser(int x) { auto lambda = [](int y) { return y + 500; }; return lambda(x); }");
-            Assert::AreEqual(2, violations, "there should be 2 ODR violation(s)");
+            Assert::AreEqual(1, violations, "wrong number of ODR violation(s)");
             Assert::AreEqual("\n"
-                            "ODR VIOLATION: ??R<lambda_1>@?0??DifferentLambdaUser@@YAHH@Z@QEBA?A?<auto>@@H@Z\n"
-                            "[tu3.cpp]\n"
-                            "inline constexpr int __cdecl DifferentLambdaUser(int)::(lambda)::operator()(int) const { return y + 50; }\n"
-                            "[tu4.cpp]\n"
-                            "inline constexpr int __cdecl DifferentLambdaUser(int)::(lambda)::operator()(int) const { return y + 500; }\n"
-                            "\n"
                             "ODR VIOLATION: ?DifferentLambdaUser@@YAHH@Z\n"
                             "[tu3.cpp]\n"
                             "inline int __cdecl DifferentLambdaUser(int) {\n"
@@ -1952,6 +1946,214 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                             "};\n", output);
         }
     },
+    {"test to make sure relocs have been applied to bodies", []
+        {
+            const auto& [violations, output] = RunTest ("inline int g_aGlobal1 = 1; struct MakeSureRelocs { int HaveBeenAppliedToBodies() { return g_aGlobal1; } };"
+                                                      , "inline int g_aGlobal2 = 2; struct MakeSureRelocs { int HaveBeenAppliedToBodies() { return g_aGlobal2; } };");
+            Assert::AreEqual(2, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: ?HaveBeenAppliedToBodies@MakeSureRelocs@@QEAAHXZ\n"
+                            "[tu3.cpp]\n"
+                            "int __cdecl MakeSureRelocs::HaveBeenAppliedToBodies() { return g_aGlobal1; }\n"
+                            "[tu4.cpp]\n"
+                            "int __cdecl MakeSureRelocs::HaveBeenAppliedToBodies() { return g_aGlobal2; }\n"
+                            "\n"
+                            "ODR VIOLATION: MakeSureRelocs\n"
+                            "[tu3.cpp]\n"
+                            "struct MakeSureRelocs { // sizeof=1\n"
+                            "   int __cdecl HaveBeenAppliedToBodies() { return g_aGlobal1; }\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct MakeSureRelocs { // sizeof=1\n"
+                            "   int __cdecl HaveBeenAppliedToBodies() { return g_aGlobal2; }\n"
+                            "};\n", output);
+        }
+    },
+    {"test overloads in different TUs", []
+        {
+            const auto& [violations, output] = RunTest ("int AnOverloadInTU1(void) { return 0; } int AnOverloadInTU1(char a) { return sizeof(a); } "
+                                                      , "int AnOverloadInTU2(void) { return 0; } int AnOverloadInTU2(char a) { return sizeof(a); }");
+            Assert::AreEqual(0, violations, "wrong number of ODR violations");
+            Assert::AreEqual("", output);
+        }
+    },
+    {"A lambda closure type has no linkage and no cross-TU identity.", []
+        {
+            const auto& [violations, output] = RunTest ("size_t SizeOfInt() { return [](){ return sizeof(int); }(); }"
+                                                      , "size_t SizeOfInt() { return [](){ return sizeof(int); }(); }");
+            Assert::AreEqual(0, violations, "wrong number of ODR violations");
+            Assert::AreEqual("", output);
+        }
+    },
+    {"A lambda closure type has no linkage and no cross-TU identity but the enclosing inline function can have an ODR violation", []
+        {
+            const auto& [violations, output] = RunTest ("size_t SizeOfInt() { return [](){ return sizeof(char); }(); }"
+                                                      , "size_t SizeOfInt() { return [](){ return sizeof(long); }(); }");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: ?SizeOfInt@@YA_KXZ\n"
+                            "[tu3.cpp]\n"
+                            "unsigned long long __cdecl SizeOfInt() {\n"
+                            "    return []() {\n"
+                            "        return sizeof(char);\n"
+                            "    }();\n"
+                            "}\n"
+                            "[tu4.cpp]\n"
+                            "unsigned long long __cdecl SizeOfInt() {\n"
+                            "    return []() {\n"
+                            "        return sizeof(long);\n"
+                            "    }();\n"
+                            "}\n", output);
+        }
+    },
+    {"A lambda initializing an inline global int variable", []
+        {
+            const auto& [violations, output] = RunTest ("inline constexpr auto x = [] { return 1; }();"
+                                                      , "inline constexpr auto x = [] { return 2; }();");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: x\n"
+                            "[tu3.cpp]\n"
+                            "inline constexpr int x = [] { return 1; }();\n"
+                            "[tu4.cpp]\n"
+                            "inline constexpr int x = [] { return 2; }();\n"
+                          , output);
+        }
+    },
+    {"Brace initialization works when assigning return value of a lambda initializing an inline global int variable", []
+        {
+            const auto& [violations, output] = RunTest ("inline constexpr auto x{[] { return 1; }()};"
+                                                      , "inline constexpr auto x{[] { return 2; }()};");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: x\n"
+                            "[tu3.cpp]\n"
+                            "inline constexpr int x{[] { return 1; }()};\n"
+                            "[tu4.cpp]\n"
+                            "inline constexpr int x{[] { return 2; }()};\n"
+                          , output);
+        }
+    },
+    {"Brace initialization inside a namespace works when initializing an inline global int variable", []
+        {
+            const auto& [violations, output] = RunTest ("namespace Hi { inline constexpr auto x{1}; }"
+                                                      , "namespace Hi { inline constexpr auto x{2}; }");
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: Hi::x\n"
+                            "[tu3.cpp]\n"
+                            "inline constexpr int Hi::x{1};\n"
+                            "[tu4.cpp]\n"
+                            "inline constexpr int Hi::x{2};\n"
+                          , output);
+        }
+    },
+    {"Brace initialization works when initializing an inline global std::pair variable", []
+        {
+            const auto& [violations, output] = RunTest ("#include <utility>\ninline std::pair<int, int> x{1, 2};"
+                                                      , "#include <utility>\ninline std::pair<int, int> x{2, 1};");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: x\n"
+                            "[tu3.cpp]\n"
+                            "inline std::pair<int, int> x = x{1, 2};\n"
+                            "[tu4.cpp]\n"
+                            "inline std::pair<int, int> x = x{2, 1};\n"
+                          , output);
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+        }
+    },
+    {"Assigning a lambda to an inline global lambda variable",[]
+        {
+            const auto& [violations, output] = RunTest ("inline constexpr auto x = [] { return 1; };"
+                                                      , "inline constexpr auto x = [] { return 2; };");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: x\n"
+                            "[tu3.cpp]\n"
+                            "inline constexpr auto x = [] { return 1; };\n"
+                            "[tu4.cpp]\n"
+                            "inline constexpr auto x = [] { return 2; };\n"
+                          , output);
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+        }
+    },
+    {"Non-static data-member initialization from a lambda", []
+        {
+            const auto& [violations, output] = RunTest ("struct S { int x = [] { return 1; }(); };"
+                                                      , "struct S { int x = [] { return 2; }(); };");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: S\n"
+                            "[tu3.cpp]\n"
+                            "struct S { // sizeof=4\n"
+                            "   int x=[] { return 1; }();\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct S { // sizeof=4\n"
+                            "   int x=[] { return 2; }();\n"
+                            "};\n", output);
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+        }
+    },
+    {"Template instantiations using lambda assigning to global inline int", []
+        {
+            const auto& [violations, output] = RunTest ("template<class T> inline int g() { return [] { return sizeof(T)  ; }(); } inline int x = g<int>();"
+                                                      , "template<class T> inline int g() { return [] { return sizeof(T)+1; }(); } inline int x = g<int>();");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: ??$g@H@@YAHXZ\n"
+                            "[tu3.cpp]\n"
+                            "inline int __cdecl g<int>() {\n"
+                            "    return [] {\n"
+                            "        return sizeof(int);\n"
+                            "    }();\n"
+                            "}\n"
+                            "[tu4.cpp]\n"
+                            "inline int __cdecl g<int>() {\n"
+                            "    return [] {\n"
+                            "        return sizeof(int) + 1;\n"
+                            "    }();\n"
+                            "}\n"
+                            "\n"
+                            "ODR VIOLATION: ?g@@YAHXZ\n"
+                            "[tu3.cpp]\n"
+                            "template <class T> inline int __cdecl g() {\n"
+                            "    return [] {\n"
+                            "        return sizeof(T);\n"
+                            "    }();\n"
+                            "}\n"
+                            "[tu4.cpp]\n"
+                            "template <class T> inline int __cdecl g() {\n"
+                            "    return [] {\n"
+                            "        return sizeof(T) + 1;\n"
+                            "    }();\n"
+                            "}\n", output);
+            Assert::AreEqual(2, violations, "wrong number of ODR violations");
+        }
+    },
+    {"testing lambdas, auto and template instantiations", []
+        {
+            const auto& [violations, output] = RunTest ("template<class T> auto f() { return [](T* /*p*/) { /* ... */ }; }"
+                                                        "auto g_1_f_int   = f<int  >();"
+                                                        "auto g_1_f_char  = f<char >();"
+                                                        "auto g_1_f_short = f<short>();"
+                                                        "auto g_1_f_long  = f<long >();"
+                                                      , "template<class T> auto f() { return [](T* /*p*/) { /* ... */ }; }"
+                                                        "auto g_2_f_int   = f<int  >();"
+                                                        "auto g_2_f_char  = f<char >();"
+                                                        "auto g_2_f_short = f<short>();"
+                                                        "auto g_2_f_long  = f<long >();"
+                                                      );
+            Assert::AreEqual("", output);
+            Assert::AreEqual(0, violations, "wrong number of ODR violations");
+        }
+    },
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1972,7 +2174,6 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                 
                 
                 ");
-            Assert::AreEqual(1, violations, "wrong number of ODR violations");
             Assert::AreEqual("\n"
 
 
@@ -1980,6 +2181,7 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
 
 
                             "};\n", output);
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
         }
     },
 

@@ -44,9 +44,16 @@ namespace OdrCop2
         const std::string fullyQualified;
         bool operator==(const UdtInfo& other) const { return fullyQualified == other.fullyQualified; }
     };
+    struct VarInfo
+    {
+        const std::string TU;
+        const std::string fullyQualified;
+        bool operator==(const VarInfo& other) const { return fullyQualified == other.fullyQualified; }
+    };
     struct AllMaps
     {
         std::map<std::string,std::vector<     UdtInfo>>      udtMap;
+        std::map<std::string,std::vector<     VarInfo>>      varMap;
         std::map<std::string,std::vector<    EnumInfo>>     enumMap;
         std::map<std::string,std::vector< TypedefInfo>>  typedefMap;
         std::map<std::string,std::vector<FunctionInfo>> functionMap;
@@ -67,14 +74,19 @@ namespace OdrCop2
         {}
         bool VisitFunctionDecl(FunctionDecl* funcDecl)
         {
-            if (funcDecl->isImplicit())
-                return true;
-
             if (context->getSourceManager().isInSystemHeader(funcDecl->getLocation()))
                 return true; // skip anything not in the main file or a user header
 
+            if (funcDecl->isImplicit())
+                return true;
+
             if (funcDecl->getStorageClass() == clang::SC_Static || funcDecl->isInAnonymousNamespace())
                 return true; // if the function has internal-linkage, skip it
+
+            if (const auto* method = dyn_cast<CXXMethodDecl>(funcDecl))
+            if (const auto* record = dyn_cast<CXXRecordDecl>(method->getDeclContext()))
+            if (record->isLambda())
+                return true; // skip lambdas, too
 
             if (funcDecl->isThisDeclarationADefinition())
             {
@@ -93,6 +105,9 @@ namespace OdrCop2
 
             if (recordDecl->isInAnonymousNamespace())
                 return true; // if the class/struc/union has internal-linkage, skip it
+
+            if (recordDecl->isLambda())
+                return true; // skip lambdas
 
             if (recordDecl->isThisDeclarationADefinition())
             {
@@ -121,16 +136,71 @@ namespace OdrCop2
         }
         bool VisitTypedefNameDecl(clang::TypedefNameDecl* typedefDecl)
         {
-            if (typedefDecl->isImplicit())
-                return true;
-
             if (context->getSourceManager().isInSystemHeader(typedefDecl->getLocation()))
                 return true; // skip anything not in the main file or a user header
+
+            if (typedefDecl->isImplicit())
+                return true;
 
             std::string aliasName    = typedefDecl->getQualifiedNameAsString();
             std::string resolvedType = typedefDecl->getUnderlyingType().getCanonicalType().getAsString(printPolicy);
             std::string fqtd         = aliasName + " = " + resolvedType;
             maps.typedefMap[aliasName].push_back({TU, fqtd});
+            return true;
+        }
+        bool VisitVarDecl(const VarDecl* varDecl)
+        {
+            if (context->getSourceManager().isInSystemHeader(varDecl->getLocation()))
+                return true; // skip anything not in the main file or a user header
+
+            if (varDecl->isInline() == false)
+                return true; // we only care about globals defined inline in headers
+            if (varDecl->isLocalVarDecl())
+                return true; // local variables can't be ODR violations
+            if (isa<CXXRecordDecl>(varDecl->getDeclContext()))
+                return true; // struct/class statics:  already done during CXXRecordDecl parsing
+
+            std::string out = "inline ";
+
+            if (varDecl->isConstexpr())
+                out += "constexpr ";
+            
+            if (varDecl->getType()->getAsCXXRecordDecl() &&
+                varDecl->getType()->getAsCXXRecordDecl()->isLambda())
+                out += "auto";
+            else
+                out += varDecl->getType().getUnqualifiedType().getAsString(printPolicy);
+
+            out += " ";
+
+            std::string key = varDecl->getQualifiedNameAsString();
+            out += key;
+
+            if (const auto* init = varDecl->getInit())
+            {
+                if (const auto* initList = dyn_cast<InitListExpr>(init))
+                {
+                    out += "{";
+                    for (unsigned i=0; i<initList->getNumInits(); ++i)
+                    {
+                        if (i > 0)
+                            out += ", ";
+                        out += Lexer::getSourceText(CharSourceRange::getTokenRange(initList->getInit(i)->getSourceRange()), context->getSourceManager(), context->getLangOpts());
+                    }
+                    out += "}";
+                }
+                else
+                {
+                    std::string text = Lexer::getSourceText(CharSourceRange::getTokenRange(init->getSourceRange()), context->getSourceManager(), context->getLangOpts()).str();
+                    if (text.starts_with("{"))
+                        out +=         text;
+                    else
+                        out += " = " + text;
+                }
+            }
+            out += ";";
+
+            maps.varMap[key].push_back({TU, out});
             return true;
         }
 
@@ -243,7 +313,6 @@ namespace OdrCop2
         {
             std::string fqn;
 
-
             // if it's a template, that comes first
             if (const FunctionTemplateDecl* ftd = funcDecl->getDescribedFunctionTemplate())
             {
@@ -301,6 +370,9 @@ namespace OdrCop2
                 fqn += funcDecl->getReturnType().getAsString(printPolicy);
             else if (const Type* ty = funcDecl->getReturnType().getTypePtr(); ty->isEnumeralType())
                 fqn += ConstructEnumName(ty->getAs<EnumType>()->getDecl(), nullptr);
+            else if (funcDecl->getReturnType()->getAsCXXRecordDecl()
+                  && funcDecl->getReturnType()->getAsCXXRecordDecl()->isLambda())
+                fqn += "auto"; // in case of returning a lambda
             else
                 fqn += funcDecl->getReturnType().getCanonicalType().getAsString(printPolicy);
 
@@ -788,6 +860,9 @@ namespace OdrCop2
                     if (nested->isInjectedClassName())
                         continue;
 
+                    if (nested->isLambda())
+                        continue;
+
                     // recurse but indent
                     std::istringstream iss(ConstructRecordSignature(nested));
                     for (std::string line; std::getline(iss, line); )
@@ -1182,12 +1257,14 @@ namespace OdrCop2
     {
         template<typename Out> static int ReportOdrViolations(const AllMaps& maps, Out&& out)
         {
-            return OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.    enumMap, out)
-                 + OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.functionMap, out)
-                 + OdrCop2::OdrViolationReporter::ReportOdrViolations(maps. typedefMap, out)
-                 + OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.     udtMap, out);
+            int violations = 0;
+            violations += OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.    enumMap, out);
+            violations += OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.functionMap, out);
+            violations += OdrCop2::OdrViolationReporter::ReportOdrViolations(maps. typedefMap, out);
+            violations += OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.     udtMap, out);
+            violations += OdrCop2::OdrViolationReporter::ReportOdrViolations(maps.     varMap, out);
+            return violations;
         }
-
         template<typename T, typename Out> static int ReportOdrViolations(const std::map<std::string,T>& map, Out&& out)
         {
             int violationCount = 0;
