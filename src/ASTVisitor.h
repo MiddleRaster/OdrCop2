@@ -113,7 +113,7 @@ namespace OdrCop2
             {
                 std::string key = recordDecl->getQualifiedNameAsString();
                      if (recordDecl->getDescribedClassTemplate())                            key += "<>";
-                else if (auto* CTSD = dyn_cast<ClassTemplateSpecializationDecl>(recordDecl)) key += TemplateArgsToString(CTSD->getTemplateArgs());
+                else if (auto* CTSD = dyn_cast<ClassTemplateSpecializationDecl>(recordDecl)) key += TemplateArgsToString(CTSD->getTemplateArgs(), true);
 
                 maps.udtMap[key].push_back({TU, ConstructRecordSignature(recordDecl)});
             }
@@ -262,7 +262,7 @@ namespace OdrCop2
             return parent + "(unnamed enum: " + firstEnumName + ")";
         }
 
-        std::string TemplateArgsToString(const clang::TemplateArgumentList& args)
+        std::string TemplateArgsToString(const clang::TemplateArgumentList& args, bool wantAnonymousNamespaceWithTU=false)
         {
             std::string out;
             out += "<";
@@ -275,13 +275,30 @@ namespace OdrCop2
                 const clang::TemplateArgument& arg = args[i];
                 switch (arg.getKind())
                 {
-                case clang::TemplateArgument::Type:              out += arg.getAsType().getAsString();                                                                break;
                 case clang::TemplateArgument::Integral:          out += llvm::toString(arg.getAsIntegral(), 10);                                                      break;
                 case clang::TemplateArgument::NullPtr:           out += "nullptr";                                                                                    break;
                 case clang::TemplateArgument::Declaration:       out += arg.getAsDecl()->getQualifiedNameAsString();                                                  break;
                 case clang::TemplateArgument::Null:              out += "null";                                                                                       break;
                 case clang::TemplateArgument::Template:          out += arg.getAsTemplate().getAsTemplateDecl()->getQualifiedNameAsString();                          break;
                 case clang::TemplateArgument::TemplateExpansion: out += arg.getAsTemplateOrTemplatePattern().getAsTemplateDecl()->getQualifiedNameAsString() + "..."; break;
+                case clang::TemplateArgument::Type:
+                {
+                    bool isInAnonymousNamespace = false;
+                    if (const auto* rd = arg.getAsType()->getAsCXXRecordDecl())
+                    if (rd->isInAnonymousNamespace())
+                        isInAnonymousNamespace = true;
+
+                    if (wantAnonymousNamespaceWithTU && isInAnonymousNamespace)
+                    {
+                        std::string ans = arg.getAsType().getAsString();
+                        const std::string from = "anonymous namespace";
+                        if (auto pos = ans.find(from); pos != std::string::npos)
+                            ans.replace(pos, from.size(), "anonymous namespace in " + TU);
+                        out += ans;
+                    } else
+                        out += arg.getAsType().getAsString();
+                }
+                    break;
                 case clang::TemplateArgument::Expression:
                 {
                     std::string s;

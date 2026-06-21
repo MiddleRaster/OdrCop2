@@ -2213,6 +2213,66 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
             Assert::AreEqual(0, violations, "wrong number of ODR violations");
         }
     },
+    {"Test 5 - Anonymous type used only inside inline function. OdrCop should SHOULD flag", []
+        {
+            const auto& [violations, output] = RunTest ("namespace T5 {"
+                                                        "    namespace { struct Local { int    x; }; }"
+                                                        "    inline int f() { Local l{1}; return l.x; }"
+                                                        "    Local g_1_t5_instance;"
+                                                        "}"
+                                                      , "namespace T5 {"
+                                                        "    namespace { struct Local { double y; }; }"
+                                                        "    inline int f() { Local l{1.0}; return (int)l.y; }"
+                                                        "    Local g_2_t5_instance;"
+                                                        "}");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: ?f@T5@@YAHXZ\n"
+                            "[tu3.cpp]\n"
+                            "inline int __cdecl T5::f() {\n"
+                            "    Local l{1};\n"
+                            "    return l.x;\n"
+                            "}\n"
+                            "[tu4.cpp]\n"
+                            "inline int __cdecl T5::f() {\n"
+                            "    Local l{1.};\n"
+                            "    return (int)l.y;\n"
+                            "}\n", output);
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+        }
+    },
+    {"Test 6 - Anonymous type as template argument, external-linkage instantiation, template type is in anonymous namespace. OdrCop should NOT flag", []
+        {
+            { // without instantiation
+                const auto& [violations, output] = RunTest ("namespace T6 {"
+                                                            "   namespace { struct Tag { int x; }; }"
+                                                            "   template<typename T> struct Wrapper { T t; };"
+                                                         // "   inline Wrapper<Tag> f1() { return {}; }"
+                                                            "}"
+                                                          , "namespace T6 {"
+                                                            "   namespace { struct Tag { double y; }; }"
+                                                            "   template<typename T> struct Wrapper { T t; };"
+                                                         // "   inline Wrapper<Tag> f2() { return {}; }"
+                                                            "}");
+                Assert::AreEqual("", output);
+                Assert::AreEqual(0, violations, "wrong number of ODR violations");
+            }
+
+            { // with instantiation
+                const auto& [violations, output] = RunTest ("namespace T6 {"
+                                                            "   namespace { struct Tag { int x; }; }"
+                                                            "   template<typename T> struct Wrapper { T t; };"
+                                                            "   inline Wrapper<Tag> f1() { return {}; }"
+                                                            "}"
+                                                          , "namespace T6 {"
+                                                            "   namespace { struct Tag { double y; }; }"
+                                                            "   template<typename T> struct Wrapper { T t; };"
+                                                            "   inline Wrapper<Tag> f2() { return {}; }"
+                                                            "}");
+                Assert::AreEqual("", output);
+                Assert::AreEqual(0, violations, "wrong number of ODR violations");
+            }
+        }
+    },
 
 
 
