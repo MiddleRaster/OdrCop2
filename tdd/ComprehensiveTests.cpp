@@ -2059,11 +2059,19 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
             Assert::AreEqual("\n"
                             "ODR VIOLATION: x\n"
                             "[tu3.cpp]\n"
-                            "inline std::pair<int, int> x = x{1, 2};\n"
+                            "inline std::pair<int, int> x{1, 2};\n"
                             "[tu4.cpp]\n"
-                            "inline std::pair<int, int> x = x{2, 1};\n"
+                            "inline std::pair<int, int> x{2, 1};\n"
                           , output);
             Assert::AreEqual(1, violations, "wrong number of ODR violations");
+        }
+    },
+    {"Brace initialization works when initializing an inline global std::pair variable, take 2", []
+        {
+            const auto& [violations, output] = RunTest ("#include <utility>\ninline std::pair<int, int> x{1,2};"
+                                                      , "#include <utility>\ninline std::pair<int, int> x{1, 2};"); // spaces are not an ODR violation
+            Assert::AreEqual("", output);
+            Assert::AreEqual(0, violations, "wrong number of ODR violations");
         }
     },
     {"Assigning a lambda to an inline global lambda variable",[]
@@ -2159,7 +2167,7 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
     //        Assert::AreEqual(0, violations, "wrong number of ODR violations");
     //    }
     //},
-    {"Top-level anonymous type, different layouts. OdrCop2 should NOT flag", []
+    {"Test 1 - Top-level anonymous type, different layouts. OdrCop2 should NOT flag", []
         {
             const auto& [violations, output] = RunTest ("namespace Tests { namespace T1 { namespace { struct Empty { int x;    }; } Empty t1_instance; } }"
                                                       , "namespace Tests { namespace T1 { namespace { struct Empty { double y; }; } Empty t1_instance; } }");
@@ -2167,7 +2175,7 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
             Assert::AreEqual(0, violations, "wrong number of ODR violations");
         }
     },
-    {"Anonymous type inside external-linkage struct, different layouts. OdrCop2 SHOULD flag", []
+    {"Test 2 - Anonymous type inside external-linkage struct, different layouts. OdrCop2 SHOULD flag", []
         {
             const auto& [violations, output] = RunTest ("namespace T2 { namespace { struct Helper {          int x; ~Helper() {} }; } struct Public { Helper h; }; }"
                                                       , "namespace T2 { namespace { struct Helper { unsigned int y;              }; } struct Public { Helper h; }; }");
@@ -2189,6 +2197,23 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
             Assert::AreEqual(1, violations, "wrong number of ODR violations");
         }
     },
+    {"Test 3 - Anonymous type inside external-linkage struct, identical layouts. OdrCop should NOT flag", []
+        {
+            const auto& [violations, output] = RunTest ("namespace T3 { namespace { struct Helper { int x; }; } struct Public { Helper h; }; }"
+                                                      , "namespace T3 { namespace { struct Helper { int x; }; } struct Public { Helper h; }; }");
+            Assert::AreEqual("", output);
+            Assert::AreEqual(0, violations, "wrong number of ODR violations");
+        }
+    },
+    {"Test 4 - Anonymous type unused by external-linkage struct. OdrCop should NOT flag", []
+        {
+            const auto& [violations, output] = RunTest ("namespace T4 { namespace { struct Helper { int x; void f();    }; } struct Public { int a; }; Helper g_1_t4_helper_instance; Public g_1_t4_public_instance; }"
+                                                      , "namespace T4 { namespace { struct Helper { int x; void f(int); }; } struct Public { int a; }; Helper g_2_t4_helper_instance; Public g_2_t4_public_instance; }");
+            Assert::AreEqual("", output);
+            Assert::AreEqual(0, violations, "wrong number of ODR violations");
+        }
+    },
+
 
 
 

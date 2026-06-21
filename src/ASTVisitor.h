@@ -153,15 +153,17 @@ namespace OdrCop2
             if (context->getSourceManager().isInSystemHeader(varDecl->getLocation()))
                 return true; // skip anything not in the main file or a user header
 
-            if (varDecl->isInline() == false)
-                return true; // we only care about globals defined inline in headers
             if (varDecl->isLocalVarDecl())
                 return true; // local variables can't be ODR violations
             if (isa<CXXRecordDecl>(varDecl->getDeclContext()))
                 return true; // struct/class statics:  already done during CXXRecordDecl parsing
+            if (varDecl->getLinkageAndVisibility().getLinkage() != clang::Linkage::External)
+                return true; // internal linkage (anon namespace, static, const at file scope, etc.)
 
-            std::string out = "inline ";
+            std::string out;
 
+            if (varDecl->isInline())
+                out = "inline ";
             if (varDecl->isConstexpr())
                 out += "constexpr ";
             
@@ -176,26 +178,46 @@ namespace OdrCop2
             std::string key = varDecl->getQualifiedNameAsString();
             out += key;
 
-            if (const auto* init = varDecl->getInit())
+
+            if (varDecl->getInit())
             {
-                if (const auto* initList = dyn_cast<InitListExpr>(init))
+                SourceLocation nameLoc = varDecl->getLocation();
+                SourceLocation  endLoc = varDecl->getEndLoc();
+                if (endLoc != nameLoc)
                 {
-                    out += "{";
-                    for (unsigned i=0; i<initList->getNumInits(); ++i)
+                    const Expr* init = varDecl->getInit()->IgnoreImplicit();
+                    if (const auto* ctor = dyn_cast<CXXConstructExpr>(init))
                     {
-                        if (i > 0)
-                            out += ", ";
-                        out += Lexer::getSourceText(CharSourceRange::getTokenRange(initList->getInit(i)->getSourceRange()), context->getSourceManager(), context->getLangOpts());
+                        out += "{";
+                        for (unsigned i=0; i<ctor->getNumArgs(); ++i)
+                        {
+                            if (i > 0) out += ", ";
+                            out += Lexer::getSourceText(CharSourceRange::getTokenRange(ctor->getArg(i)->getSourceRange()), context->getSourceManager(), context->getLangOpts());
+                        }
+                        out += "}";
                     }
-                    out += "}";
-                }
-                else
-                {
-                    std::string text = Lexer::getSourceText(CharSourceRange::getTokenRange(init->getSourceRange()), context->getSourceManager(), context->getLangOpts()).str();
-                    if (text.starts_with("{"))
-                        out +=         text;
+                    else if (const auto* initList = dyn_cast<InitListExpr>(init))
+                    {
+                        out += "{";
+                        for (unsigned i=0; i<initList->getNumInits(); ++i)
+                        {
+                            if (i > 0) out += ", ";
+                            out += Lexer::getSourceText(CharSourceRange::getTokenRange(initList->getInit(i)->getSourceRange()), context->getSourceManager(), context->getLangOpts());
+                        }
+                        out += "}";
+                    }
                     else
-                        out += " = " + text;
+                    {
+                        SourceLocation afterName = nameLoc.getLocWithOffset((SourceLocation::IntTy)varDecl->getName().size());
+                        std::string text = Lexer::getSourceText(CharSourceRange::getTokenRange(nameLoc, endLoc), context->getSourceManager(), context->getLangOpts()).str();
+                        StringRef suffix = StringRef(text).drop_front(varDecl->getName().size()).ltrim();
+                        if (suffix.starts_with("{"))
+                            out += suffix;
+                        else if (suffix.starts_with("="))
+                            out += " " + suffix.str();
+                        else
+                            out += " = " + suffix.str();
+                    }
                 }
             }
             out += ";";
