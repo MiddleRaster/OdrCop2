@@ -3,7 +3,7 @@ using System.Text.Json;
 
 if (args.Length < 1)
 {
-    Console.Error.WriteLine("Usage: OCReplay <path-to.binlog> [output-dir]");
+    Console.Error.WriteLine("Usage: bl2oc <path-to.binlog> [output-dir]");
     return 1;
 }
 
