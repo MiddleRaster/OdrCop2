@@ -476,11 +476,52 @@ namespace OdrCop2
             {
                 std::string indentation(fqn.size(), ' ');
 
-                QualType       qualType = param->getType().getCanonicalType();
+                enum class IndirKind { Ptr, LRef, RRef };
+                struct IndirLayer
+                {
+                    IndirKind kind;
+                    bool      isConst;    // const on this declarator layer (e.g. T* const)
+                    bool      isVolatile; // volatile on this declarator layer (rarely seen but correct)
+                };
+
+                QualType qualType = param->getType().getCanonicalType();
+
+                std::vector<IndirLayer> layers; // outermost last, so we append in reverse
+                while (true)
+                {
+                    if (const auto* pt = qualType->getAs<PointerType>())
+                    {   // const/volatile sit on the QualType wrapping the PointerType
+                        layers.push_back({IndirKind::Ptr,
+                                          qualType.isConstQualified(),
+                                          qualType.isVolatileQualified()});
+                        qualType = pt->getPointeeType().getCanonicalType();
+                    }
+                    else if (const auto* rt = qualType->getAs<LValueReferenceType>())
+                    {   // references can't be const-qualified, but be uniform
+                        layers.push_back({IndirKind::LRef, false, false});
+                        qualType = rt->getPointeeType().getCanonicalType();
+                    }
+                    else if (const auto* rt = qualType->getAs<RValueReferenceType>())
+                    {
+                        layers.push_back({IndirKind::RRef, false, false});
+                        qualType = rt->getPointeeType().getCanonicalType();
+                    }
+                    else
+                        break;
+                }
+
+                // qualType is now the base type; it may itself be const (e.g. const T* -> base is const T)
+                bool baseConst    = qualType.isConstQualified();
+                bool baseVolatile = qualType.isVolatileQualified();
+
                 const clang::Type* type = qualType.getTypePtr();
                 const auto*  recordType = dyn_cast<clang::RecordType>(type);
                 if (recordType && recordType->getDecl()->isInAnonymousNamespace())
                 {
+                    std::string prefix;
+                    if (baseConst)    prefix += "const ";
+                    if (baseVolatile) prefix += "volatile ";
+
                     // recurse but indent
                     std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
                     bool first = true;
@@ -488,12 +529,28 @@ namespace OdrCop2
                     {
                         if (first) {
                             first = false;
-                            fqn += line + "\n"; // the first line is already indented
+                            fqn += prefix + line + "\n"; // the first line is already indented
                         }
                         else
                             fqn += indentation + line + "\n";
                     }
                     fqn = fqn.substr(0, fqn.size()-2); // strip off last ";\n"
+
+                    if (layers.size() > 0)
+                        fqn += " "; // put a space between type and * or &
+
+                    // Re-apply layers in reverse (innermost first)
+                    for (auto it = layers.rbegin(); it != layers.rend(); ++it)
+                    {
+                        switch (it->kind)
+                        {
+                        case IndirKind::Ptr:  fqn += "*";  break;
+                        case IndirKind::LRef: fqn += "&";  break;
+                        case IndirKind::RRef: fqn += "&&"; break;
+                        }
+                        if (it->isConst)    fqn += "const ";
+                        if (it->isVolatile) fqn += "volatile ";
+                    }
                 }
                 else
                     fqn += param->getType().getAsString(printPolicy);
