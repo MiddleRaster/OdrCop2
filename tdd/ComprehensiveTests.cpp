@@ -666,9 +666,9 @@ Test ComprehensiveTests[] =
             Assert::AreEqual("\n"
                             "ODR VIOLATION: ?DifferentInlineFunctionBody@@YAHH@Z\n"
                             "[tu3.cpp]\n"
-                            "inline int __cdecl DifferentInlineFunctionBody(int) { return x + 34; }\n"
+                            "inline int __cdecl DifferentInlineFunctionBody(int x) { return x + 34; }\n"
                             "[tu4.cpp]\n"
-                            "inline int __cdecl DifferentInlineFunctionBody(int) { return x + 340; }\n", output);
+                            "inline int __cdecl DifferentInlineFunctionBody(int x) { return x + 340; }\n", output);
         }
     },
     {"TU34-035: Same internal-linkage static function name, different body. Expected ODR violation: NO.", []
@@ -928,14 +928,14 @@ Test ComprehensiveTests[] =
             Assert::AreEqual("\n"
                             "ODR VIOLATION: ?DifferentLambdaUser@@YAHH@Z\n"
                             "[tu3.cpp]\n"
-                            "inline int __cdecl DifferentLambdaUser(int) {\n"
+                            "inline int __cdecl DifferentLambdaUser(int x) {\n"
                             "    auto lambda = [](int y) {\n"
                             "        return y + 50;\n"
                             "    };\n"
                             "    return lambda(x);\n"
                             "}\n"
                             "[tu4.cpp]\n"
-                            "inline int __cdecl DifferentLambdaUser(int) {\n"
+                            "inline int __cdecl DifferentLambdaUser(int x) {\n"
                             "    auto lambda = [](int y) {\n"
                             "        return y + 500;\n"
                             "    };\n"
@@ -2311,6 +2311,42 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
             }
         }
     },
+    {"Test 8 - Anonymous type as base class of external-linkage struct, identical layouts. OdrCop should NOT flag", []
+        {
+            const auto& [violations, output] = RunTest ("namespace T8 { namespace { struct Base { int x; }; } struct Public : Base {}; }"
+                                                      , "namespace T8 { namespace { struct Base { int x; }; } struct Public : Base {}; }");
+            Assert::AreEqual("", output);
+            Assert::AreEqual(0, violations, "wrong number of ODR violations");
+        }
+    },
+    {"Test 9 - Anonymous type as parameter of external-linkage function, different layouts. OdrCop SHOULD flag", []
+        {
+            OdrCop2::AllMaps maps;
+            tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), "namespace T9 { namespace { struct Arg { int    x; }; } void function9(Arg a) { (void)a; } }", { "-x", "c++", "-std=c++23" }, "tu3.cpp");
+            tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), "namespace T9 { namespace { struct Arg { double y; }; } void function9(Arg a) { (void)a; } }", { "-x", "c++", "-std=c++23" }, "tu4.cpp");
+
+            Assert::AreEqual(2, maps.functionMap.size());
+
+            auto it = maps.functionMap.begin();
+            Assert::AreEqual("void __cdecl T9::function9(struct T9::(anonymous namespace)::Arg { // sizeof=4\n"
+                             "                              int x;\n"
+                             "                           } a) { (void)a; }"
+                             , it->second[0].fullyQualified);
+            ++it;
+            Assert::AreEqual("void __cdecl T9::function9(struct T9::(anonymous namespace)::Arg { // sizeof=8\n"
+                "                              double y;\n"
+                "                           } a) { (void)a; }"
+                , it->second[0].fullyQualified);
+
+
+            std::ostringstream oss;
+            int violations = OdrCop2::OdrViolationReporter::ReportOdrViolations(maps, oss);
+            Assert::AreEqual(0, violations);
+            Assert::AreEqual("", oss.str());
+        }
+    },
+
+// add test using pointer to types, either as args or fields; try anonymous namespace version, too
 
 
 

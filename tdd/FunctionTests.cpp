@@ -90,7 +90,7 @@ IamAtypedef foo() { return 42; }
             bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++", "-std=c++23" });
             Assert::IsTrue(ok);
             const auto& vec = maps.functionMap.begin()->second;
-            Assert::AreEqual("int __cdecl foo(char *, bool) {\n"
+            Assert::AreEqual("int __cdecl foo(char * p, bool b) {\n"
                              "    (void)p;\n"
                              "    (void)b;\n"
                              "    return 42;\n"
@@ -110,8 +110,8 @@ IamAtypedef foo() { return 42; }
             auto it2 = std::next(it1);
 
             // alphabetized by key, so the specialization comes first
-            Assert::AreEqual("int __cdecl foo<int>(const int &) { return i + 1; }",          it1->second[0].fullyQualified, "should have found the function template specialization");
-            Assert::AreEqual("template <typename T> T __cdecl foo(const T &) { return t; }", it2->second[0].fullyQualified, "should have found the function template");
+            Assert::AreEqual("int __cdecl foo<int>(const int & i) { return i + 1; }",          it1->second[0].fullyQualified, "should have found the function template specialization");
+            Assert::AreEqual("template <typename T> T __cdecl foo(const T & t) { return t; }", it2->second[0].fullyQualified, "should have found the function template");
         }
     },
 };

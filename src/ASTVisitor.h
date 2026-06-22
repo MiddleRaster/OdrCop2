@@ -471,12 +471,36 @@ namespace OdrCop2
 
             // args
             fqn += '(';
+
             for (const ParmVarDecl* param : funcDecl->parameters())
             {
-                QualType    type     = param->getType();
-                std::string typeName = type.getAsString(printPolicy);
+                std::string indentation(fqn.size(), ' ');
 
-                fqn += typeName;
+                QualType       qualType = param->getType().getCanonicalType();
+                const clang::Type* type = qualType.getTypePtr();
+                const auto*  recordType = dyn_cast<clang::RecordType>(type);
+                if (recordType && recordType->getDecl()->isInAnonymousNamespace())
+                {
+                    // recurse but indent
+                    std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
+                    bool first = true;
+                    for (std::string line; std::getline(iss, line);)
+                    {
+                        if (first) {
+                            first = false;
+                            fqn += line + "\n"; // the first line is already indented
+                        }
+                        else
+                            fqn += indentation + line + "\n";
+                    }
+                    fqn = fqn.substr(0, fqn.size()-2); // strip off last ";\n"
+                }
+                else
+                    fqn += param->getType().getAsString(printPolicy);
+
+                // if there is no parameter name, skip this
+                if (param->getName().str() != "")
+                    fqn += " " + param->getName().str();
 
                 // Default argument, if any
                 if (param->hasDefaultArg())

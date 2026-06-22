@@ -162,12 +162,12 @@ Test EnumTests[] =
                             "[tu1.cpp]\n"
                             "struct S { // sizeof=4\n"
                             "enum S::(unnamed enum: A) { A=0 };   enum S::(unnamed enum: A) { A=0 } E;\n"
-                            "   void __cdecl f(decltype(S::E)) { (void)value; }\n"
+                            "   void __cdecl f(decltype(S::E) value) { (void)value; }\n"
                             "};\n"
                             "[tu2.cpp]\n"
                             "struct S { // sizeof=4\n"
                             "enum S::(unnamed enum: A) { A=0, B=1 };   enum S::(unnamed enum: A) { A=0, B=1 } E;\n"
-                            "   void __cdecl f(decltype(S::E)) { (void)value; }\n"
+                            "   void __cdecl f(decltype(S::E) value) { (void)value; }\n"
                             "};\n", oss.str());
         }
     },
