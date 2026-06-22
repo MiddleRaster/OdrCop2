@@ -2426,7 +2426,7 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
             }
         }
     },
-    {"Test 9b - Field is pointer to Anonymous type", []
+    {"Test 9b - Field is pointer to Anonymous namespace type", []
         {
             { // pointer anonymous namespace arg
                 OdrCop2::AllMaps maps;
@@ -2469,10 +2469,36 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
             }
         }
     },
+    {"Test 9c - Return type that is an Anonymous namespace type", []
+        {
+            { // anonymous namespace return value
+                OdrCop2::AllMaps maps;
+                tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), "namespace T9 { namespace { struct Arg { int x; }; } Arg Foo() { return Arg{}; } }", { "-x", "c++", "-std=c++23" });
+
+                Assert::AreEqual(1, maps.functionMap.size());
+                auto it = maps.functionMap.begin();
+                Assert::AreEqual("struct T9::(anonymous namespace)::Arg { // sizeof=4\n"
+                                 "   int x;\n"
+                                 "} __cdecl T9::Foo() { return Arg{}; }"
+                               , it->second[0].fullyQualified);
+            }
+            { // pointer to a const anonymous namespace return value
+                OdrCop2::AllMaps maps;
+                tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), "namespace T9 { namespace { struct Arg { int x; }; } const Arg* Foo() { return new Arg{}; } }", { "-x", "c++", "-std=c++23" });
+
+                Assert::AreEqual(1, maps.functionMap.size());
+                auto it = maps.functionMap.begin();
+                Assert::AreEqual("const struct T9::(anonymous namespace)::Arg { // sizeof=4\n"
+                                 "   int x;\n"
+                                 "} * __cdecl T9::Foo() { return new Arg{}; }"
+                               , it->second[0].fullyQualified);
+            }
+        }
+    },
 
 
 
-// add test using pointer to types, as fields; try anonymous namespace version, too
+
 // add test returning anonymous namespace return value (pointer or reference, too)
 
 // Add tests for return values being different in two TUs; try anonymous namespace versions, too

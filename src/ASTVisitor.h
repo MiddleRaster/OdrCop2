@@ -485,7 +485,30 @@ namespace OdrCop2
                   && funcDecl->getReturnType()->getAsCXXRecordDecl()->isLambda())
                 fqn += "auto"; // in case of returning a lambda
             else
-                fqn += funcDecl->getReturnType().getCanonicalType().getAsString(printPolicy);
+            {
+                QualType      qualType = funcDecl->getReturnType().getCanonicalType();
+                PointersAndReferences par(qualType);  // qualType is now the base type
+                const auto* recordType = dyn_cast<clang::RecordType>(qualType.getTypePtr());
+                if (recordType && recordType->getDecl()->isInAnonymousNamespace())
+                {
+                    std::string indentation(fqn.size(), ' ');
+                    std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
+                    bool first = true;
+                    for (std::string line; std::getline(iss, line);)
+                    {
+                        if (first) {
+                            first = false;
+                            fqn += par.ConstructPrefix() + line + "\n";
+                        }
+                        else
+                            fqn += indentation + line + "\n";
+                    }
+                    fqn  = fqn.substr(0, fqn.size()-2); // remove "; "
+                    fqn += par.ConstructPointersAndReferences();
+                }
+                else
+                    fqn += qualType.getAsString(printPolicy);
+            }
 
             fqn += " ";
 
