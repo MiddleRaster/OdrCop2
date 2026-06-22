@@ -348,6 +348,78 @@ namespace OdrCop2
             return out;
         }
 
+        class PointersAndReferences
+        {
+            enum class IndirKind { Ptr, LRef, RRef };
+            struct IndirLayer
+            {
+                IndirKind kind;
+                bool      isConst;    // const on this declarator layer (e.g. T* const)
+                bool      isVolatile; // volatile on this declarator layer (rarely seen but correct)
+            };
+            std::vector<IndirLayer> layers; // outermost last, so we append in reverse
+            bool baseConst;
+            bool baseVolatile;
+        public:
+            PointersAndReferences(QualType& qualType) // N.B.:  qualType WILL be modified and this is what I want:  it will describe the actual type w/o pointers/references
+            {
+                while (true)
+                {
+                    if (const auto* pt = qualType->getAs<PointerType>())
+                    {   // const/volatile sit on the QualType wrapping the PointerType
+                        layers.push_back({ IndirKind::Ptr,
+                                          qualType.isConstQualified(),
+                                          qualType.isVolatileQualified() });
+                        qualType = pt->getPointeeType().getCanonicalType();
+                    }
+                    else if (const auto* rt = qualType->getAs<LValueReferenceType>())
+                    {   // references can't be const-qualified, but be uniform
+                        layers.push_back({ IndirKind::LRef, false, false });
+                        qualType = rt->getPointeeType().getCanonicalType();
+                    }
+                    else if (const auto* rt = qualType->getAs<RValueReferenceType>())
+                    {
+                        layers.push_back({ IndirKind::RRef, false, false });
+                        qualType = rt->getPointeeType().getCanonicalType();
+                    }
+                    else
+                        break;
+                }
+
+                // qualType is now the base type; it may itself be const (e.g. const T* -> base is const T)
+                baseConst    = qualType.isConstQualified();
+                baseVolatile = qualType.isVolatileQualified();
+            }
+
+            std::string ConstructPrefix() const
+            {
+                std::string prefix;
+                if (baseConst)    prefix += "const ";
+                if (baseVolatile) prefix += "volatile ";
+                return prefix;
+            }
+            std::string ConstructPointersAndReferences() const
+            {
+                std::string out;
+
+                if (layers.size() > 0)
+                    out += " "; // put a space between type and * or &
+
+                // Re-apply layers in reverse (innermost first)
+                for (auto it = layers.rbegin(); it != layers.rend(); ++it)
+                {
+                    switch (it->kind)
+                    {
+                    case IndirKind::Ptr:  out += "*";  break;
+                    case IndirKind::LRef: out += "&";  break;
+                    case IndirKind::RRef: out += "&&"; break;
+                    }
+                    if (it->isConst)      out += "const ";
+                    if (it->isVolatile)   out += "volatile ";
+                }
+                return out;
+            }
+        };
         std::string ConstructFunctionSignature(const clang::FunctionDecl* funcDecl, bool wantFullyQualifiedMethodName=true)
         {
             std::string fqn;
@@ -476,52 +548,13 @@ namespace OdrCop2
             {
                 std::string indentation(fqn.size(), ' ');
 
-                enum class IndirKind { Ptr, LRef, RRef };
-                struct IndirLayer
-                {
-                    IndirKind kind;
-                    bool      isConst;    // const on this declarator layer (e.g. T* const)
-                    bool      isVolatile; // volatile on this declarator layer (rarely seen but correct)
-                };
-
-                QualType qualType = param->getType().getCanonicalType();
-
-                std::vector<IndirLayer> layers; // outermost last, so we append in reverse
-                while (true)
-                {
-                    if (const auto* pt = qualType->getAs<PointerType>())
-                    {   // const/volatile sit on the QualType wrapping the PointerType
-                        layers.push_back({IndirKind::Ptr,
-                                          qualType.isConstQualified(),
-                                          qualType.isVolatileQualified()});
-                        qualType = pt->getPointeeType().getCanonicalType();
-                    }
-                    else if (const auto* rt = qualType->getAs<LValueReferenceType>())
-                    {   // references can't be const-qualified, but be uniform
-                        layers.push_back({IndirKind::LRef, false, false});
-                        qualType = rt->getPointeeType().getCanonicalType();
-                    }
-                    else if (const auto* rt = qualType->getAs<RValueReferenceType>())
-                    {
-                        layers.push_back({IndirKind::RRef, false, false});
-                        qualType = rt->getPointeeType().getCanonicalType();
-                    }
-                    else
-                        break;
-                }
-
-                // qualType is now the base type; it may itself be const (e.g. const T* -> base is const T)
-                bool baseConst    = qualType.isConstQualified();
-                bool baseVolatile = qualType.isVolatileQualified();
+                QualType qualType       = param->getType().getCanonicalType();
+                PointersAndReferences par(qualType);
 
                 const clang::Type* type = qualType.getTypePtr();
                 const auto*  recordType = dyn_cast<clang::RecordType>(type);
                 if (recordType && recordType->getDecl()->isInAnonymousNamespace())
                 {
-                    std::string prefix;
-                    if (baseConst)    prefix += "const ";
-                    if (baseVolatile) prefix += "volatile ";
-
                     // recurse but indent
                     std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
                     bool first = true;
@@ -529,28 +562,13 @@ namespace OdrCop2
                     {
                         if (first) {
                             first = false;
-                            fqn += prefix + line + "\n"; // the first line is already indented
+                            fqn += par.ConstructPrefix() + line + "\n"; // the first line is already indented
                         }
                         else
                             fqn += indentation + line + "\n";
                     }
-                    fqn = fqn.substr(0, fqn.size()-2); // strip off last ";\n"
-
-                    if (layers.size() > 0)
-                        fqn += " "; // put a space between type and * or &
-
-                    // Re-apply layers in reverse (innermost first)
-                    for (auto it = layers.rbegin(); it != layers.rend(); ++it)
-                    {
-                        switch (it->kind)
-                        {
-                        case IndirKind::Ptr:  fqn += "*";  break;
-                        case IndirKind::LRef: fqn += "&";  break;
-                        case IndirKind::RRef: fqn += "&&"; break;
-                        }
-                        if (it->isConst)    fqn += "const ";
-                        if (it->isVolatile) fqn += "volatile ";
-                    }
+                    fqn  = fqn.substr(0, fqn.size()-2); // strip off last ";\n"
+                    fqn += par.ConstructPointersAndReferences();
                 }
                 else
                     fqn += param->getType().getAsString(printPolicy);
@@ -902,27 +920,29 @@ namespace OdrCop2
                     out += ConstructAttributes(decl);
 
                     { // when a field is defined in an anonymous namespace, include the full definition here with the field.
-                        const clang::Type* type = field->getType().getCanonicalType().getTypePtr();
-                        const auto*  recordType = clang::dyn_cast<clang::RecordType>(type);
+                        QualType qualType       = field->getType().getCanonicalType();
+                        PointersAndReferences par(qualType);
+
+                        const clang::Type* type = qualType.getTypePtr();
+                        const auto* recordType  = clang::dyn_cast<clang::RecordType>(type);
                         if (recordType && recordType->getDecl()->isInAnonymousNamespace())
                         {
-                            clang::Qualifiers quals = field->getType().getQualifiers();
-                            if (quals.hasConst())    out += "const ";
-                            if (quals.hasVolatile()) out += "volatile ";
+                            out += par.ConstructPrefix();
                             out += ConstructAttributes(field);
-                         
-                            // recurse but indent
+
                             std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
                             bool first=true;
                             for (std::string line; std::getline(iss, line);)
                             {
                                 if (first) {
                                     first = false;
-                                    out +=         line + "\n"; // the first line is already indented
-                                } else
+                                    out +=         line + "\n";
+                                }
+                                else
                                     out += "   " + line + "\n";
                             }
-                            out  = out.substr(0, out.size()-2); // strip off last ";\n"
+                            out  = out.substr(0, out.size()-2);
+                            out += par.ConstructPointersAndReferences();
                             out += " " + field->getNameAsString();
                         }
                         else if (const auto* enumTy = llvm::dyn_cast<clang::EnumType>(type); enumTy && !enumTy->getDecl()->getIdentifier())

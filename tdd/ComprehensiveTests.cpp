@@ -2352,7 +2352,6 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                 tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), "namespace T9 { namespace { struct Arg { int x; }; } void function9(Arg* a) { (void)a; } }", { "-x", "c++", "-std=c++23" }, "tu3.cpp");
 
                 Assert::AreEqual(1, maps.functionMap.size());
-
                 auto it = maps.functionMap.begin();
                 Assert::AreEqual("void __cdecl T9::function9(struct T9::(anonymous namespace)::Arg { // sizeof=4\n"
                                  "                              int x;\n"
@@ -2364,7 +2363,6 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                 tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), "namespace T9 { struct Arg { int x; }; void function9(const Arg* a) { (void)a; } }", { "-x", "c++", "-std=c++23" }, "tu3.cpp");
 
                 Assert::AreEqual(1, maps.functionMap.size());
-
                 auto it = maps.functionMap.begin();
                 Assert::AreEqual("void __cdecl T9::function9(const Arg * a) { (void)a; }", it->second[0].fullyQualified);
             }
@@ -2373,7 +2371,6 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                 tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), "namespace T9 { struct Arg { int x; }; void function9(const Arg& a) { (void)a; } }", { "-x", "c++", "-std=c++23" }, "tu3.cpp");
 
                 Assert::AreEqual(1, maps.functionMap.size());
-
                 auto it = maps.functionMap.begin();
                 Assert::AreEqual("void __cdecl T9::function9(const Arg & a) { (void)a; }", it->second[0].fullyQualified);
             }
@@ -2382,7 +2379,6 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                 tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), "namespace T9 { struct Arg { int x; }; void function9(Arg** a) { (void)a; } }", { "-x", "c++", "-std=c++23" }, "tu3.cpp");
 
                 Assert::AreEqual(1, maps.functionMap.size());
-
                 auto it = maps.functionMap.begin();
                 Assert::AreEqual("void __cdecl T9::function9(Arg ** a) { (void)a; }", it->second[0].fullyQualified);
             }
@@ -2391,7 +2387,6 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                 tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), "namespace T9 { struct Arg { int x; }; void function9(Arg** const& a) { (void)a; } }", { "-x", "c++", "-std=c++23" }, "tu3.cpp");
 
                 Assert::AreEqual(1, maps.functionMap.size());
-
                 auto it = maps.functionMap.begin();
                 Assert::AreEqual("void __cdecl T9::function9(Arg **const & a) { (void)a; }", it->second[0].fullyQualified);
             }
@@ -2401,7 +2396,6 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                 tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), "namespace T9 { namespace { struct Arg { int x; }; } void function9(const Arg& a) { (void)a; } }", { "-x", "c++", "-std=c++23" }, "tu3.cpp");
 
                 Assert::AreEqual(1, maps.functionMap.size());
-
                 auto it = maps.functionMap.begin();
                 Assert::AreEqual("void __cdecl T9::function9(const struct T9::(anonymous namespace)::Arg { // sizeof=4\n"
                                  "                              int x;\n"
@@ -2413,7 +2407,6 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                 tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), "namespace T9 { namespace { struct Arg { int x; }; } void function9(Arg&& a) { (void)a; } }", { "-x", "c++", "-std=c++23" }, "tu3.cpp");
 
                 Assert::AreEqual(1, maps.functionMap.size());
-
                 auto it = maps.functionMap.begin();
                 Assert::AreEqual("void __cdecl T9::function9(struct T9::(anonymous namespace)::Arg { // sizeof=4\n"
                                  "                              int x;\n"
@@ -2425,14 +2418,55 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                 tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), "namespace T9 { namespace { struct Arg { int x; }; } void function9(Arg** const& a) { (void)a; } }", { "-x", "c++", "-std=c++23" }, "tu3.cpp");
 
                 Assert::AreEqual(1, maps.functionMap.size());
-
                 auto it = maps.functionMap.begin();
                 Assert::AreEqual("void __cdecl T9::function9(struct T9::(anonymous namespace)::Arg { // sizeof=4\n"
                                  "                              int x;\n"
                                  "                           } **const & a) { (void)a; }"
                                  , it->second[0].fullyQualified);
             }
+        }
+    },
+    {"Test 9b - Field is pointer to Anonymous type", []
+        {
+            { // pointer anonymous namespace arg
+                OdrCop2::AllMaps maps;
+                tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), "namespace T9 { namespace { struct Arg { int x; }; } struct Foo { Arg* a; }; }", { "-x", "c++", "-std=c++23" }, "tu3.cpp");
 
+                Assert::AreEqual(1, maps.udtMap.size());
+                auto it = maps.udtMap.begin();
+                Assert::AreEqual("struct T9::Foo { // sizeof=8\n"
+                                 "   struct T9::(anonymous namespace)::Arg { // sizeof=4\n"
+                                 "      int x;\n"
+                                 "   } * a;\n"
+                                 "};"
+                               , it->second[0].fullyQualified);
+            }
+            { // reference to const anonymous namespace arg
+                OdrCop2::AllMaps maps;
+                tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), "namespace T9 { namespace { struct Arg { int x; }; } struct Foo { const Arg& a; }; }", { "-x", "c++", "-std=c++23" }, "tu3.cpp");
+
+                Assert::AreEqual(1, maps.udtMap.size());
+                auto it = maps.udtMap.begin();
+                Assert::AreEqual("struct T9::Foo { // sizeof=8\n"
+                                 "   const struct T9::(anonymous namespace)::Arg { // sizeof=4\n"
+                                 "      int x;\n"
+                                 "   } & a;\n"
+                                 "};"
+                               , it->second[0].fullyQualified);
+            }
+            { // reference to pointer to volatile anonymous namespace arg
+                OdrCop2::AllMaps maps;
+                tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), "namespace T9 { namespace { struct Arg { int x; }; } struct Foo { volatile Arg* & a; }; }", { "-x", "c++", "-std=c++23" });
+
+                Assert::AreEqual(1, maps.udtMap.size());
+                auto it = maps.udtMap.begin();
+                Assert::AreEqual("struct T9::Foo { // sizeof=8\n"
+                                 "   volatile struct T9::(anonymous namespace)::Arg { // sizeof=4\n"
+                                 "      int x;\n"
+                                 "   } *& a;\n"
+                                 "};"
+                               , it->second[0].fullyQualified);
+            }
         }
     },
 
