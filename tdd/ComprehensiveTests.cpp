@@ -2273,6 +2273,44 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
             }
         }
     },
+    {"Test 7 - Anonymous type as base class of external-linkage struct, different layouts. OdrCop SHOULD flag", []
+        {
+            { // different sizes:  easy
+                const auto& [violations, output] = RunTest ("namespace T7 { namespace { struct Base { int    x; }; } struct Public : Base {}; };"
+                                                          , "namespace T7 { namespace { struct Base { double y; }; } struct Public : Base {}; };");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: T7::Public\n"
+                                "[tu3.cpp]\n"
+                                "struct T7::Public : public struct T7::(anonymous namespace)::Base { // sizeof=4\n"
+                                "                       int x;\n"
+                                "                    } { // sizeof=4\n"
+                                "};\n"
+                                "[tu4.cpp]\n"
+                                "struct T7::Public : public struct T7::(anonymous namespace)::Base { // sizeof=8\n"
+                                "                       double y;\n"
+                                "                    } { // sizeof=8\n"
+                                "};\n", output);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            }
+            {
+                const auto& [violations, output] = RunTest ("namespace T7 { namespace { struct Base { int x; }; } struct Public : Base {}; };"
+                                                          , "namespace T7 { namespace { struct Base { int y; }; } struct Public : Base {}; };");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: T7::Public\n"
+                                "[tu3.cpp]\n"
+                                "struct T7::Public : public struct T7::(anonymous namespace)::Base { // sizeof=4\n"
+                                "                       int x;\n"
+                                "                    } { // sizeof=4\n"
+                                "};\n"
+                                "[tu4.cpp]\n"
+                                "struct T7::Public : public struct T7::(anonymous namespace)::Base { // sizeof=4\n"
+                                "                       int y;\n"
+                                "                    } { // sizeof=4\n"
+                                "};\n", output);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            }
+        }
+    },
 
 
 

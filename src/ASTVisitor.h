@@ -740,14 +740,15 @@ namespace OdrCop2
             out += " ";
 
             // base classes
+            std::string indentation(out.size()+2, ' '); // +2 to get to the ": "
             bool firstBase = true;
             for (const clang::CXXBaseSpecifier& base : recordDecl->bases())
             {
-                if (firstBase)
+                if (firstBase) {
                     out += ": ";
-                else
+                    firstBase = false;
+                } else
                     out += ", ";
-                firstBase = false;
 
                 switch (base.getAccessSpecifier()) {
                 case clang::AS_public:    out += "public ";    break;
@@ -758,7 +759,27 @@ namespace OdrCop2
                 if (base.isVirtual())
                     out += "virtual ";
 
-                out += base.getType().getAsString(printPolicy);
+                // when a base is defined in an anonymous namespace, include the full definition here.
+                const clang::Type* type = base.getType().getCanonicalType().getTypePtr();
+                const auto* recordType  = dyn_cast<RecordType>(type);
+                if (recordType && recordType->getDecl()->isInAnonymousNamespace())
+                {
+                    // recurse but indent
+                    std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
+                    bool first = true;
+                    for (std::string line; std::getline(iss, line);)
+                    {
+                        if (first) {
+                            first = false;
+                            out += line + "\n"; // the first line is already indented
+                        }
+                        else
+                            out += indentation + line + "\n";
+                    }
+                    out = out.substr(0, out.size()-2); // strip off last ";\n"
+                }
+                else
+                    out += base.getType().getAsString(printPolicy);
             }
             if (firstBase == false)
                 out += " ";
