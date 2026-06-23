@@ -329,8 +329,14 @@ Test ComprehensiveTests[] =
         {
             const auto& [violations, output] = RunTest( "struct DifferentMethodVirtualness { virtual int value() { return 18; } int data; };"
                                                     ,   "struct DifferentMethodVirtualness {         int value() { return 18; } int data; };");
-            Assert::AreEqual(1, violations, "there should be 1 ODR violation");
+            Assert::AreEqual(2, violations, "there should be 1 ODR violation");
             Assert::AreEqual("\n"
+                            "ODR VIOLATION: DifferentMethodVirtualness::value()\n"
+                            "[tu3.cpp]\n"
+                            "virtual int __cdecl DifferentMethodVirtualness::value() { return 18; }\n"
+                            "[tu4.cpp]\n"
+                            "int __cdecl DifferentMethodVirtualness::value() { return 18; }\n"
+                            "\n"
                             "ODR VIOLATION: DifferentMethodVirtualness\n"
                             "[tu3.cpp]\n"
                             "struct DifferentMethodVirtualness { // sizeof=16\n"
@@ -380,7 +386,7 @@ Test ComprehensiveTests[] =
                                                     ,   "struct DifferentMethodNoexcept { int value()          { return 20; } int data; };");
             Assert::AreEqual(2, violations, "there should be 1 ODR violation");
             Assert::AreEqual("\n"
-                            "ODR VIOLATION: ?value@DifferentMethodNoexcept@@QEAAHXZ\n"
+                            "ODR VIOLATION: DifferentMethodNoexcept::value()\n"
                             "[tu3.cpp]\n"
                             "int __cdecl DifferentMethodNoexcept::value() noexcept { return 20; }\n"
                             "[tu4.cpp]\n"
@@ -405,7 +411,7 @@ Test ComprehensiveTests[] =
                                                     ,   "struct DifferentMethodAttributes { [[nodiscard]] int value() { return 20; } int data; };");
             Assert::AreEqual(2, violations, "there should be 1 ODR violation");
             Assert::AreEqual("\n"
-                            "ODR VIOLATION: ?value@DifferentMethodAttributes@@QEAAHXZ\n"
+                            "ODR VIOLATION: DifferentMethodAttributes::value()\n"
                             "[tu3.cpp]\n"
                             "int __cdecl DifferentMethodAttributes::value() { return 20; }\n"
                             "[tu4.cpp]\n"
@@ -664,7 +670,7 @@ Test ComprehensiveTests[] =
                                                     ,   "inline int DifferentInlineFunctionBody(int x) { return x + 340; }");
             Assert::AreEqual(1, violations, "there should be 1 ODR violation");
             Assert::AreEqual("\n"
-                            "ODR VIOLATION: ?DifferentInlineFunctionBody@@YAHH@Z\n"
+                            "ODR VIOLATION: DifferentInlineFunctionBody(int)\n"
                             "[tu3.cpp]\n"
                             "inline int __cdecl DifferentInlineFunctionBody(int x) { return x + 34; }\n"
                             "[tu4.cpp]\n"
@@ -893,7 +899,7 @@ Test ComprehensiveTests[] =
                                                     ,   "struct DifferentConstructorInitializer { int value; DifferentConstructorInitializer() : value(480) {} };");
             Assert::AreEqual(2, violations, "there should be 2 ODR violations");
             Assert::AreEqual("\n"
-                            "ODR VIOLATION: ??0DifferentConstructorInitializer@@QEAA@XZ\n"
+                            "ODR VIOLATION: DifferentConstructorInitializer::DifferentConstructorInitializer()\n"
                             "[tu3.cpp]\n"
                             "void __cdecl DifferentConstructorInitializer::DifferentConstructorInitializer() : value(48) {}\n"
                             "[tu4.cpp]\n"
@@ -926,7 +932,7 @@ Test ComprehensiveTests[] =
                                                     ,   "inline int DifferentLambdaUser(int x) { auto lambda = [](int y) { return y + 500; }; return lambda(x); }");
             Assert::AreEqual(1, violations, "wrong number of ODR violation(s)");
             Assert::AreEqual("\n"
-                            "ODR VIOLATION: ?DifferentLambdaUser@@YAHH@Z\n"
+                            "ODR VIOLATION: DifferentLambdaUser(int)\n"
                             "[tu3.cpp]\n"
                             "inline int __cdecl DifferentLambdaUser(int x) {\n"
                             "    auto lambda = [](int y) {\n"
@@ -1005,7 +1011,7 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                                                     ,   "constexpr int SameConstexprFunctionDifferentBody() { return 2; }");
             Assert::AreEqual(1, violations, "there should be 1 ODR violation(s)");
             Assert::AreEqual("\n"
-                            "ODR VIOLATION: ?SameConstexprFunctionDifferentBody@@YAHXZ\n"
+                            "ODR VIOLATION: SameConstexprFunctionDifferentBody()\n"
                             "[tu3.cpp]\n"
                             "constexpr int __cdecl SameConstexprFunctionDifferentBody() { return 1; }\n"
                             "[tu4.cpp]\n"
@@ -1093,7 +1099,7 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                                                       , "struct SameClassDifferentInlinenessOnFunction { __declspec(noinline) void InlineOrNot() {} };");
             Assert::AreEqual(2, violations, "wrong number of ODR violations");
             Assert::AreEqual("\n"
-                            "ODR VIOLATION: ?InlineOrNot@SameClassDifferentInlinenessOnFunction@@QEAAXXZ\n"
+                            "ODR VIOLATION: SameClassDifferentInlinenessOnFunction::InlineOrNot()\n"
                             "[tu3.cpp]\n"
                             "inline void __cdecl SameClassDifferentInlinenessOnFunction::InlineOrNot() {}\n"
                             "[tu4.cpp]\n"
@@ -1116,7 +1122,7 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                                                       , "struct SameClassDifferentConstexpressOnFunction {           void ConstexpreOrNot() {} };");
             Assert::AreEqual(2, violations, "wrong number of ODR violations");
             Assert::AreEqual("\n"
-                            "ODR VIOLATION: ?ConstexpreOrNot@SameClassDifferentConstexpressOnFunction@@QEAAXXZ\n"
+                            "ODR VIOLATION: SameClassDifferentConstexpressOnFunction::ConstexpreOrNot()\n"
                             "[tu3.cpp]\n"
                             "constexpr void __cdecl SameClassDifferentConstexpressOnFunction::ConstexpreOrNot() {}\n"
                             "[tu4.cpp]\n"
@@ -1141,7 +1147,7 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                                                         "struct SameClassDifferentOverrideSpecifier : BaseForOverride { void OverrideOrNot() {} };");
             Assert::AreEqual(2, violations, "wrong number of ODR violations");
             Assert::AreEqual("\n"
-                            "ODR VIOLATION: ?OverrideOrNot@SameClassDifferentOverrideSpecifier@@UEAAXXZ\n"
+                            "ODR VIOLATION: SameClassDifferentOverrideSpecifier::OverrideOrNot()\n"
                             "[tu3.cpp]\n"
                             "void __cdecl SameClassDifferentOverrideSpecifier::OverrideOrNot() override override {}\n"
                             "[tu4.cpp]\n"
@@ -1164,7 +1170,7 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                                                       , "struct SameClassDifferentNoExceptOnMethod { void NoExceptMethod()          {} };");
             Assert::AreEqual(2, violations, "wrong number of ODR violations");
             Assert::AreEqual("\n"
-                            "ODR VIOLATION: ?NoExceptMethod@SameClassDifferentNoExceptOnMethod@@QEAAXXZ\n"
+                            "ODR VIOLATION: SameClassDifferentNoExceptOnMethod::NoExceptMethod()\n"
                             "[tu3.cpp]\n"
                             "void __cdecl SameClassDifferentNoExceptOnMethod::NoExceptMethod() noexcept {}\n"
                             "[tu4.cpp]\n"
@@ -1473,7 +1479,7 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                                                       , "inline int FunctionsMustBeBitwiseIdentical() { return 2; }");
             Assert::AreEqual(1, violations, "wrong number of ODR violations");
             Assert::AreEqual("\n"
-                            "ODR VIOLATION: ?FunctionsMustBeBitwiseIdentical@@YAHXZ\n"
+                            "ODR VIOLATION: FunctionsMustBeBitwiseIdentical()\n"
                             "[tu3.cpp]\n"
                             "inline int __cdecl FunctionsMustBeBitwiseIdentical() { return 1; }\n"
                             "[tu4.cpp]\n"
@@ -1489,7 +1495,7 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                                                         "template<          > inline int SameFunctionTemplateSpecializationDifferentDefinitions<int>() { return 2; }");
             Assert::AreEqual(1, violations, "wrong number of ODR violations");
             Assert::AreEqual("\n"
-                            "ODR VIOLATION: ??$SameFunctionTemplateSpecializationDifferentDefinitions@H@@YAHXZ\n"
+                            "ODR VIOLATION: SameFunctionTemplateSpecializationDifferentDefinitions<int>()\n"
                             "[tu3.cpp]\n"
                             "inline int __cdecl SameFunctionTemplateSpecializationDifferentDefinitions<int>() { return 1; }\n"
                             "[tu4.cpp]\n"
@@ -1571,8 +1577,14 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
         {
             const auto& [violations, output] = RunTest ("struct SameClassDifferentVirtualnessOnFunction { virtual void VirtualOrNot() {} };"
                                                       , "struct SameClassDifferentVirtualnessOnFunction {         void VirtualOrNot() {} };");
-            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual(2, violations, "wrong number of ODR violations");
             Assert::AreEqual("\n"
+                            "ODR VIOLATION: SameClassDifferentVirtualnessOnFunction::VirtualOrNot()\n"
+                            "[tu3.cpp]\n"
+                            "virtual void __cdecl SameClassDifferentVirtualnessOnFunction::VirtualOrNot() {}\n"
+                            "[tu4.cpp]\n"
+                            "void __cdecl SameClassDifferentVirtualnessOnFunction::VirtualOrNot() {}\n"
+                            "\n"
                             "ODR VIOLATION: SameClassDifferentVirtualnessOnFunction\n"
                             "[tu3.cpp]\n"
                             "struct SameClassDifferentVirtualnessOnFunction { // sizeof=8\n"
@@ -1836,7 +1848,7 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                                                       , "inline int InlinedBody() { return 2; } inline void FunctionUsing_InlinedBody() { InlinedBody(); }");
             Assert::AreEqual(1, violations, "wrong number of ODR violations");
             Assert::AreEqual("\n"
-                            "ODR VIOLATION: ?InlinedBody@@YAHXZ\n"
+                            "ODR VIOLATION: InlinedBody()\n"
                             "[tu3.cpp]\n"
                             "inline int __cdecl InlinedBody() { return 1; }\n"
                             "[tu4.cpp]\n"
@@ -1956,7 +1968,7 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                                                       , "inline int g_aGlobal2 = 2; struct MakeSureRelocs { int HaveBeenAppliedToBodies() { return g_aGlobal2; } };");
             Assert::AreEqual(2, violations, "wrong number of ODR violations");
             Assert::AreEqual("\n"
-                            "ODR VIOLATION: ?HaveBeenAppliedToBodies@MakeSureRelocs@@QEAAHXZ\n"
+                            "ODR VIOLATION: MakeSureRelocs::HaveBeenAppliedToBodies()\n"
                             "[tu3.cpp]\n"
                             "int __cdecl MakeSureRelocs::HaveBeenAppliedToBodies() { return g_aGlobal1; }\n"
                             "[tu4.cpp]\n"
@@ -1995,7 +2007,7 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                                                       , "size_t SizeOfInt() { return [](){ return sizeof(long); }(); }");
             Assert::AreEqual(1, violations, "wrong number of ODR violations");
             Assert::AreEqual("\n"
-                            "ODR VIOLATION: ?SizeOfInt@@YA_KXZ\n"
+                            "ODR VIOLATION: SizeOfInt()\n"
                             "[tu3.cpp]\n"
                             "unsigned long long __cdecl SizeOfInt() {\n"
                             "    return []() {\n"
@@ -2110,21 +2122,7 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
             const auto& [violations, output] = RunTest ("template<class T> inline int g() { return [] { return sizeof(T)  ; }(); } inline int x = g<int>();"
                                                       , "template<class T> inline int g() { return [] { return sizeof(T)+1; }(); } inline int x = g<int>();");
             Assert::AreEqual("\n"
-                            "ODR VIOLATION: ??$g@H@@YAHXZ\n"
-                            "[tu3.cpp]\n"
-                            "inline int __cdecl g<int>() {\n"
-                            "    return [] {\n"
-                            "        return sizeof(int);\n"
-                            "    }();\n"
-                            "}\n"
-                            "[tu4.cpp]\n"
-                            "inline int __cdecl g<int>() {\n"
-                            "    return [] {\n"
-                            "        return sizeof(int) + 1;\n"
-                            "    }();\n"
-                            "}\n"
-                            "\n"
-                            "ODR VIOLATION: ?g@@YAHXZ\n"
+                            "ODR VIOLATION: g<class>()\n"
                             "[tu3.cpp]\n"
                             "template <class T> inline int __cdecl g() {\n"
                             "    return [] {\n"
@@ -2135,6 +2133,20 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                             "template <class T> inline int __cdecl g() {\n"
                             "    return [] {\n"
                             "        return sizeof(T) + 1;\n"
+                            "    }();\n"
+                            "}\n"
+                            "\n"
+                            "ODR VIOLATION: g<int>()\n"
+                            "[tu3.cpp]\n"
+                            "inline int __cdecl g<int>() {\n"
+                            "    return [] {\n"
+                            "        return sizeof(int);\n"
+                            "    }();\n"
+                            "}\n"
+                            "[tu4.cpp]\n"
+                            "inline int __cdecl g<int>() {\n"
+                            "    return [] {\n"
+                            "        return sizeof(int) + 1;\n"
                             "    }();\n"
                             "}\n", output);
             Assert::AreEqual(2, violations, "wrong number of ODR violations");
@@ -2226,7 +2238,7 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                                                         "    Local g_2_t5_instance;"
                                                         "}");
             Assert::AreEqual("\n"
-                            "ODR VIOLATION: ?f@T5@@YAHXZ\n"
+                            "ODR VIOLATION: T5::f()\n"
                             "[tu3.cpp]\n"
                             "inline int __cdecl T5::f() {\n"
                             "    Local l{1};\n"
@@ -2495,17 +2507,87 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
             }
         }
     },
+    {"Test 10 - Anonymous type as return type of external-linkage function, different layouts. OdrCop SHOULD flag", []
+        {
+            {
+                const auto& [violations, output] = RunTest ("namespace T10 { namespace { struct Result { int    x; }; } Result ReturnAnAnonymousType() { return {}; }; }"
+                                                          , "namespace T10 { namespace { struct Result { double y; }; } Result ReturnAnAnonymousType() { return {}; }; }");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: T10::ReturnAnAnonymousType()\n"
+                                "[tu3.cpp]\n"
+                                "struct T10::(anonymous namespace)::Result { // sizeof=4\n"
+                                "   int x;\n"
+                                "} __cdecl T10::ReturnAnAnonymousType() { return {}; }\n"
+                                "[tu4.cpp]\n"
+                                "struct T10::(anonymous namespace)::Result { // sizeof=8\n"
+                                "   double y;\n"
+                                "} __cdecl T10::ReturnAnAnonymousType() { return {}; }\n"
+                              , output);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            }
+
+            { // return short vs long
+                const auto& [violations, output] = RunTest ("namespace T10 { short ReturnBasicType() { return 0; }; }"
+                                                          , "namespace T10 { long  ReturnBasicType() { return 0; }; }");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: T10::ReturnBasicType()\n"
+                                "[tu3.cpp]\n"
+                                "short __cdecl T10::ReturnBasicType() { return 0; }\n"
+                                "[tu4.cpp]\n"
+                                "long __cdecl T10::ReturnBasicType() { return 0; }\n"
+                              , output);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            }
+            { // empty struct
+                const auto& [violations, output] = RunTest ("namespace T10 { struct Foo{}; Foo ReturnBasicType() { return {}; }; }"
+                                                          , "namespace T10 { struct Bar{}; Bar ReturnBasicType() { return {}; }; }");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: T10::ReturnBasicType()\n"
+                                "[tu3.cpp]\n"
+                                "T10::Foo __cdecl T10::ReturnBasicType() { return {}; }\n"
+                                "[tu4.cpp]\n"
+                                "T10::Bar __cdecl T10::ReturnBasicType() { return {}; }\n"
+                              , output);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            }
+        }
+    },
+#ifdef KEEP
+    {"Test 10a - Anonymous enum as return type of external-linkage function, different layouts. OdrCop SHOULD flag", []
+        {
+            const auto& [violations, output] = RunTest ("
+                // Test 10a — Anonymous enum as return type of external-linkage function, different layouts
+               // OdrCop SHOULD flag
+               namespace T10a {
+                   namespace { enum Result { Zero, One, Two }; }
+                   Result ReturnAnAnonymousEnum() { return Zero; }
+                   Result g_1_t10a_instance = ReturnAnAnonymousEnum();
+               }
+                
+                "
+                                                      , "
+                
+                    // Test 10a — Anonymous enum as return type of external-linkage function, different layouts
+    // OdrCop SHOULD flag
+    namespace T10a {
+        namespace { enum Result { Zero, One, Two }; }
+        Result ReturnAnAnonymousEnum() { return Zero; }
+        Result g_1_t10a_instance = ReturnAnAnonymousEnum();
+    }
+                ");
+            Assert::AreEqual("\n"
 
 
 
 
-// add test returning anonymous namespace return value (pointer or reference, too)
 
-// Add tests for return values being different in two TUs; try anonymous namespace versions, too
-// TU1 int    function9() {}
-// TU2 double function9() {}
-
-
+                            "};\n", output);
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+        }
+    },
+#endif
+    // write a test for operator long() vs operator int(), for example
+    // Think about these:  the two corrections I’d be most careful about are : `explicit operator T()` is** not Key**, and attributes should not be blanket - dropped.
 
 
 

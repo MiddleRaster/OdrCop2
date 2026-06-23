@@ -109,7 +109,7 @@ Test EnumTests[] =
             std::ostringstream oss;
             Assert::AreEqual(2, OdrCop2::OdrViolationReporter::ReportOdrViolations(maps, oss), "there should be 2 ODR violations");
             Assert::AreEqual("\n"
-                            "ODR VIOLATION: ?Foo@S@@QEAA@XZ\n"
+                            "ODR VIOLATION: S::Foo()\n"
                             "[tu1.cpp]\n"
                             "enum (anonymous namespace)::(unnamed enum) { A=1 } __cdecl S::Foo() { return A; }\n"
                             "[tu2.cpp]\n"

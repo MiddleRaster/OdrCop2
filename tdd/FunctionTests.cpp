@@ -69,18 +69,13 @@ IamAtypedef foo() { return 42; }
             Assert::AreEqual("int __cdecl foo() { return 42; }", vec[0].fullyQualified, "should have returned fully qualified function name");
         }
     },
-    {"Get mangled function name", []
+    {"Get key for function", []
         {
             std::string code = "int foo() { return 42; }";
             OdrCop2::AllMaps maps;
             bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code, { "-x", "c++", "-std=c++23" });
             Assert::IsTrue(ok);
-            const auto& vec = maps.functionMap.begin()->second;
-            Assert::AreEqual("?foo@@YAHXZ", vec[0].mangled, "should return the mangled name");
-
-            char buf[1024];
-            DWORD result = UnDecorateSymbolName(vec[0].mangled.c_str(), buf, static_cast<DWORD>(sizeof(buf)), UNDNAME_COMPLETE );
-            Assert::AreEqual("int __cdecl foo(void)", std::string(buf, result), "should unmangle back to original function name");
+            Assert::AreEqual("foo()", maps.functionMap.begin()->first, "should return the key");
         }
     },
     {"Get some function args", []
