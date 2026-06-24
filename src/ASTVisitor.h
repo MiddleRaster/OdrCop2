@@ -19,36 +19,19 @@ using namespace clang;
 
 namespace OdrCop2
 {
-    struct FunctionInfo
+    enum InfoKind { Function, Typedef, Enum, Udt, Var };
+    template<InfoKind K> struct InfoBase
     {
         const std::string TU;
         const std::string fullyQualified;
-        bool operator==(const FunctionInfo& other) const { return fullyQualified == other.fullyQualified; }
+        bool operator==(const InfoBase& other) const { return fullyQualified == other.fullyQualified; }
     };
-    struct EnumInfo
-    {
-        const std::string TU;
-        const std::string fullyQualified; // eg: enum class Color : uint8_t { Red=1, Green=2, Blue=3, };
-        bool operator==(const EnumInfo& other) const { return fullyQualified == other.fullyQualified; }
-    };
-    struct TypedefInfo
-    {
-        const std::string TU;
-        const std::string fullyQualified; // eg: INT=int
-        bool operator==(const TypedefInfo& other) const { return fullyQualified == other.fullyQualified; }
-    };
-    struct UdtInfo
-    {
-        const std::string TU;
-        const std::string fullyQualified;
-        bool operator==(const UdtInfo& other) const { return fullyQualified == other.fullyQualified; }
-    };
-    struct VarInfo
-    {
-        const std::string TU;
-        const std::string fullyQualified;
-        bool operator==(const VarInfo& other) const { return fullyQualified == other.fullyQualified; }
-    };
+    using FunctionInfo = InfoBase<InfoKind::Function>;
+    using  TypedefInfo = InfoBase<InfoKind::Typedef>;
+    using     EnumInfo = InfoBase<InfoKind::Enum>;
+    using      UdtInfo = InfoBase<InfoKind::Udt>;
+    using      VarInfo = InfoBase<InfoKind::Var>;
+
     struct AllMaps
     {
         std::map<std::string,std::vector<     UdtInfo>>      udtMap;
