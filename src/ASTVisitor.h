@@ -1305,12 +1305,57 @@ namespace OdrCop2
 
                 if (auto* typedefDecl = dyn_cast<TypedefDecl>(decl))
                 {
-                    out += "   typedef " + typedefDecl->getUnderlyingType().getAsString(printPolicy) + " " + typedefDecl->getNameAsString() + ";\n";
+                    out += "   typedef ";
+                    std::string indentation(11, ' ');
+
+                    QualType underlying        = typedefDecl->getUnderlyingType();
+                    if (const auto* recordType = underlying->getAs<RecordType>())
+                    {
+                        if (recordType->getDecl()->isInAnonymousNamespace())
+                        {
+                            // recurse but indent
+                            bool first = true;
+                            std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
+                            for (std::string line; std::getline(iss, line);)
+                            {
+                                if (first) {
+                                    first = false;
+                                    out +=               line + "\n";
+                                } else
+                                    out += indentation + line + "\n";
+                            }
+                            out  = out.substr(0, out.size()-2); // strip off last ";\n"
+                            out += " " + typedefDecl->getNameAsString() + ";\n";
+                            continue;
+                        }
+                    }
+                    out += typedefDecl->getUnderlyingType().getAsString(printPolicy) + " " + typedefDecl->getNameAsString() + ";\n";
                     continue;
                 }
                 if (auto* typeAliasDecl = dyn_cast<TypeAliasDecl>(decl))
                 {
-                    out += "   using " + typeAliasDecl->getNameAsString() + " = " + typeAliasDecl->getUnderlyingType().getAsString(printPolicy) + ";\n";
+                    std::string      aliasName = typeAliasDecl->getNameAsString();
+                    QualType        underlying = typeAliasDecl->getUnderlyingType();
+                    if (const auto* recordType = underlying->getAs<RecordType>())
+                    {
+                        if (recordType->getDecl()->isInAnonymousNamespace())
+                        {
+                            std::string indentation(12 + aliasName.size(), ' '); // "   using X = "
+                            bool        first = true;
+                            std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
+                            out += "   using " + aliasName + " = ";
+                            for (std::string line; std::getline(iss, line);)
+                            {
+                                if (first) {
+                                    first = false;
+                                    out +=               line + "\n";
+                                } else
+                                    out += indentation + line + "\n";
+                            }
+                            continue;
+                        }
+                    }
+                    out += "   using " + aliasName + " = " + underlying.getAsString(printPolicy) + ";\n";
                     continue;
                 }
                     

@@ -2637,6 +2637,69 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
             Assert::AreEqual(2, violations, "wrong number of ODR violations");
         }
     },
+    {"Test 11 - Doubly-nested anonymous namespace, different layouts. OdrCop should NOT flag", []
+        {
+            const auto& [violations, output] = RunTest ("namespace T11 { namespace { namespace { struct Empty { int    x; }; } } }"
+                                                      , "namespace T11 { namespace { namespace { struct Empty { double y; }; } } }");
+            Assert::AreEqual("", output);
+            Assert::AreEqual(0, violations, "wrong number of ODR violations");
+        }
+    },
+    {"Test 12 - Anonymous Empty as template argument, different layouts. OdrCop should NOT flag", []
+        {
+            const auto& [violations, output] = RunTest ("namespace T12 { namespace { struct Empty {              }; } template<typename T> struct ClassUnderTest { T t; }; }"
+                                                      , "namespace T12 { namespace { struct Empty { int payload; }; } template<typename T> struct ClassUnderTest { T t; }; }");
+            Assert::AreEqual("", output);
+            Assert::AreEqual(0, violations, "wrong number of ODR violations");
+        }
+    },
+    {"Test 13 - a typedef of a type inside an anonymous namespace. OdrCop SHOULD flag", []
+        {
+            const auto& [violations, output] = RunTest ("namespace { struct SomeStructForTypedefTesting { int x1; }; }"
+                                                        "namespace T13 { struct AnonymousTypedefDefinition { typedef SomeStructForTypedefTesting SameTypedefDifferentUnderlyingType; }; }"
+                                                      , "namespace { struct SomeStructForTypedefTesting { int x2; }; }"
+                                                        "namespace T13 { struct AnonymousTypedefDefinition { typedef SomeStructForTypedefTesting SameTypedefDifferentUnderlyingType; }; }");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: T13::AnonymousTypedefDefinition\n"
+                            "[tu3.cpp]\n"
+                            "struct T13::AnonymousTypedefDefinition { // sizeof=1\n"
+                            "   typedef struct (anonymous namespace)::SomeStructForTypedefTesting { // sizeof=4\n"
+                            "              int x1;\n"
+                            "           } SameTypedefDifferentUnderlyingType;\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct T13::AnonymousTypedefDefinition { // sizeof=1\n"
+                            "   typedef struct (anonymous namespace)::SomeStructForTypedefTesting { // sizeof=4\n"
+                            "              int x2;\n"
+                            "           } SameTypedefDifferentUnderlyingType;\n"
+                            "};\n", output);
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+        }
+    },
+    {"Test 13a - A using alias of a type inside an anonymous namespace. OdrCop SHOULD flag", []
+        {
+            const auto& [violations, output] = RunTest ("namespace { struct SomeStructForAliasTesting { int x1; }; }"
+                                                        "namespace T13 { struct AnonymousAliasDefinition { using SameAliasDifferentUnderlyingType = SomeStructForAliasTesting; }; }"
+                                                      , "namespace { struct SomeStructForAliasTesting { int x2; }; }"
+                                                        "namespace T13 { struct AnonymousAliasDefinition { using SameAliasDifferentUnderlyingType = SomeStructForAliasTesting; }; }");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: T13::AnonymousAliasDefinition\n"
+                            "[tu3.cpp]\n"
+                            "struct T13::AnonymousAliasDefinition { // sizeof=1\n"
+                            "   using SameAliasDifferentUnderlyingType = struct (anonymous namespace)::SomeStructForAliasTesting { // sizeof=4\n"
+                            "                                               int x1;\n"
+                            "                                            };\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct T13::AnonymousAliasDefinition { // sizeof=1\n"
+                            "   using SameAliasDifferentUnderlyingType = struct (anonymous namespace)::SomeStructForAliasTesting { // sizeof=4\n"
+                            "                                               int x2;\n"
+                            "                                            };\n"
+                            "};\n", output);
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+        }
+    },
+
 
 
 
