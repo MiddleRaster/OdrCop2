@@ -525,41 +525,52 @@ namespace OdrCop2
 
             // function name
             {
-                std::string out;
-                llvm::raw_string_ostream os(out);
-                if (const FunctionTemplateDecl* ftd = funcDecl->getDescribedFunctionTemplate())
+                // an Immediately Invoked Lambda Expression; get arguments ready
+                const FunctionDecl* funcDecl2 = funcDecl->getDescribedFunctionTemplate()
+                                              ? funcDecl->getDescribedFunctionTemplate()->getTemplatedDecl()
+                                              : funcDecl;
+                fqn += [this](const FunctionDecl* decl, bool wantFullyQualifiedMethodName) -> std::string
                 {
+                    if (const auto* conv = llvm::dyn_cast<clang::CXXConversionDecl>(decl))
+                    {
+                        std::string typeName;
+                        llvm::raw_string_ostream typeOs(typeName);
+                        conv->getConversionType().print(typeOs, printPolicy);
+                        if (wantFullyQualifiedMethodName)
+                        {
+                            std::string className;
+                            llvm::raw_string_ostream classOs(className);
+                            conv->getParent()->printQualifiedName(classOs, printPolicy);
+                            return className + "::operator " + typeName;
+                        }
+                        return "operator " + typeName;
+                    }
                     if (wantFullyQualifiedMethodName)
-                        ftd->getTemplatedDecl()->printQualifiedName(os, printPolicy);
-                    else
-                        out = ftd->getTemplatedDecl()->getNameAsString();
-                }
-                else
-                {
-                    if (wantFullyQualifiedMethodName)
-                        funcDecl->printQualifiedName(os, printPolicy);
-                    else
-                        out = funcDecl->getNameAsString();
-                }
-                os.flush();
+                    {
+                        std::string out;
+                        llvm::raw_string_ostream os(out);
+                        decl->printQualifiedName(os, printPolicy);
+                        os.flush();
+                        return out;
+                    }
+                    return decl->getNameAsString();
+                }(funcDecl2, wantFullyQualifiedMethodName); // IILE invoked here
 
                 if (const auto* args = funcDecl->getTemplateSpecializationArgs())
                 {
-                    out += "<";
-                    llvm::raw_string_ostream  os2(out);
+                    fqn += "<";
+                    llvm::raw_string_ostream  os2(fqn);
                     bool first = true;
                     for (const TemplateArgument& arg : args->asArray())
                     {
                         if (!first)
-                            out += ", ";
+                            fqn += ", ";
                         arg.print(printPolicy, os2, true);
                         os2.flush();
                         first = false;
                     }
-                    out += ">";
+                    fqn += ">";
                 }
-
-                fqn += out;
             }
 
             // args
@@ -902,7 +913,19 @@ namespace OdrCop2
 
             std::string key;
 
-            // get fully qualified name (includes namespaces, class(es) and function/method name
+            if (const auto* conv = llvm::dyn_cast<clang::CXXConversionDecl>(funcDecl))
+            {
+                std::string typeName, className;
+                {
+                    llvm::raw_string_ostream typeOs(typeName);
+                    conv->getConversionType().print(typeOs, printPolicy);
+
+                    llvm::raw_string_ostream classOs(className);
+                    conv->getParent()->printQualifiedName(classOs);
+                }
+                key += className + "::operator " + typeName;
+            }
+            else
             {
                 std::string out;
                 llvm::raw_string_ostream os(out);
@@ -920,8 +943,12 @@ namespace OdrCop2
                     if (i > 0)
                         key += ",";
                     const NamedDecl* param = params->getParam(i);
-                    if      (const TemplateTypeParmDecl* typeParam = dyn_cast<TemplateTypeParmDecl>(param))
-                        key += std::string(typeParam->wasDeclaredWithTypename() ? "typename" : "class") + (typeParam->isParameterPack() ? "..." : "");
+                    if (const TemplateTypeParmDecl* typeParam = dyn_cast<TemplateTypeParmDecl>(param))
+                    {
+                        const bool isConversionTypeParam = llvm::isa<clang::CXXConversionDecl>(funcDecl);
+                        const std::string name = typeParam->getNameAsString();
+                        key += (isConversionTypeParam && !name.empty() ? name : (typeParam->wasDeclaredWithTypename() ? "typename" : "class")) + (typeParam->isParameterPack() ? "..." : "");
+                    }
                     else if (const NonTypeTemplateParmDecl* nonTypeParam = dyn_cast<NonTypeTemplateParmDecl>(param))
                         key += nonTypeParam->getType().getCanonicalType().getUnqualifiedType().getAsString(printPolicy) + (nonTypeParam->isParameterPack() ? "..." : "");
                     else if (const TemplateTemplateParmDecl* templateParam = dyn_cast<TemplateTemplateParmDecl>(param))

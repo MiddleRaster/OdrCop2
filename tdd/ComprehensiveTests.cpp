@@ -2552,44 +2552,91 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
             }
         }
     },
-#ifdef KEEP
     {"Test 10a - Anonymous enum as return type of external-linkage function, different layouts. OdrCop SHOULD flag", []
         {
-            const auto& [violations, output] = RunTest ("
-                // Test 10a — Anonymous enum as return type of external-linkage function, different layouts
-               // OdrCop SHOULD flag
-               namespace T10a {
-                   namespace { enum Result { Zero, One, Two }; }
-                   Result ReturnAnAnonymousEnum() { return Zero; }
-                   Result g_1_t10a_instance = ReturnAnAnonymousEnum();
-               }
-                
-                "
-                                                      , "
-                
-                    // Test 10a — Anonymous enum as return type of external-linkage function, different layouts
-    // OdrCop SHOULD flag
-    namespace T10a {
-        namespace { enum Result { Zero, One, Two }; }
-        Result ReturnAnAnonymousEnum() { return Zero; }
-        Result g_1_t10a_instance = ReturnAnAnonymousEnum();
-    }
-                ");
+            const auto& [violations, output] = RunTest ("namespace T10a { namespace { enum Result { Zero, One      }; } Result ReturnAnAnonymousEnum() { return Zero; } }"
+                                                      , "namespace T10a { namespace { enum Result { Zero, One, Two }; } Result ReturnAnAnonymousEnum() { return Zero; } }");
             Assert::AreEqual("\n"
-
-
-
-
-
-                            "};\n", output);
+                            "ODR VIOLATION: T10a::ReturnAnAnonymousEnum()\n"
+                            "[tu3.cpp]\n"
+                            "enum (anonymous namespace)::Result { Zero=0, One=1 } __cdecl T10a::ReturnAnAnonymousEnum() { return Zero; }\n"
+                            "[tu4.cpp]\n"
+                            "enum (anonymous namespace)::Result { Zero=0, One=1, Two=2 } __cdecl T10a::ReturnAnAnonymousEnum() { return Zero; }\n"
+                          , output);
             Assert::AreEqual(1, violations, "wrong number of ODR violations");
         }
     },
-#endif
-    // write a test for operator long() vs operator int(), for example
-    // Think about these:  the two corrections I’d be most careful about are : `explicit operator T()` is** not Key**, and attributes should not be blanket - dropped.
+    {"Test - operator long() ODR violation: differing return values", []
+        {
+            const auto& [violations, output] = RunTest ("struct Converter { operator long() const noexcept { return 42L; } };"
+                                                      , "struct Converter { operator long() const noexcept { return 99L; } };");
+            Assert::AreEqual("\n"
 
-
+                            "ODR VIOLATION: Converter::operator long() const\n"
+                            "[tu3.cpp]\n"
+                            "long __cdecl Converter::operator long() const noexcept { return 42L; }\n"
+                            "[tu4.cpp]\n"
+                            "long __cdecl Converter::operator long() const noexcept { return 99L; }\n"
+                            "\n"
+                            "ODR VIOLATION: Converter\n"
+                            "[tu3.cpp]\n"
+                            "struct Converter { // sizeof=1\n"
+                            "   long __cdecl operator long() const noexcept { return 42L; }\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct Converter { // sizeof=1\n"
+                            "   long __cdecl operator long() const noexcept { return 99L; }\n"
+                            "};\n", output);
+            Assert::AreEqual(2, violations, "wrong number of ODR violations");
+        }
+    },
+    {"Test - explicit operator T() ODR violation on class template: differing return values", []
+        {
+            const auto& [violations, output] = RunTest ("template<typename T> struct Converter { explicit operator T() const { return T(42); } };"
+                                                      , "template<typename T> struct Converter { explicit operator T() const { return T(99); } };");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: Converter::operator T() const\n"
+                            "[tu3.cpp]\n"
+                            "explicit T __cdecl Converter::operator T() const { return T(42); }\n"
+                            "[tu4.cpp]\n"
+                            "explicit T __cdecl Converter::operator T() const { return T(99); }\n"
+                            "\n"
+                            "ODR VIOLATION: Converter<>\n"
+                            "[tu3.cpp]\n"
+                            "template<typename T> struct Converter {\n"
+                            "   explicit T __cdecl operator T() const { return T(42); }\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "template<typename T> struct Converter {\n"
+                            "   explicit T __cdecl operator T() const { return T(99); }\n"
+                            "};\n", output);
+            Assert::AreEqual(2, violations, "wrong number of ODR violations");
+        }
+    },
+    {"Test - explicit operator T() as function template on non-template class: ODR violation", []
+        {
+            const auto& [violations, output] = RunTest ("struct Converter { template<typename T> explicit operator T() const { return T(42); } };"
+                                                      , "struct Converter { template<typename T> explicit operator T() const { return T(99); } };");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: Converter::operator T<T>() const\n"
+                            "[tu3.cpp]\n"
+                            "template <typename T> explicit T __cdecl Converter::operator T() const { return T(42); }\n"
+                            "[tu4.cpp]\n"
+                            "template <typename T> explicit T __cdecl Converter::operator T() const { return T(99); }\n"
+                            "\n"
+                            "ODR VIOLATION: Converter\n"
+                            "[tu3.cpp]\n"
+                            "struct Converter { // sizeof=1\n"
+                            "   template <typename T> explicit T __cdecl operator T() const { return T(42); }\n"
+                            "};\n"
+                            "[tu4.cpp]\n"
+                            "struct Converter { // sizeof=1\n"
+                            "   template <typename T> explicit T __cdecl operator T() const { return T(99); }\n"
+                            "};\n"
+                          , output);
+            Assert::AreEqual(2, violations, "wrong number of ODR violations");
+        }
+    },
 
 
 
