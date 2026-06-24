@@ -525,36 +525,34 @@ namespace OdrCop2
 
             // function name
             {
-                // an Immediately Invoked Lambda Expression; get arguments ready
                 const FunctionDecl* funcDecl2 = funcDecl->getDescribedFunctionTemplate()
                                               ? funcDecl->getDescribedFunctionTemplate()->getTemplatedDecl()
                                               : funcDecl;
-                fqn += [this](const FunctionDecl* decl, bool wantFullyQualifiedMethodName) -> std::string
+                if (const auto* conv = llvm::dyn_cast<clang::CXXConversionDecl>(funcDecl2))
                 {
-                    if (const auto* conv = llvm::dyn_cast<clang::CXXConversionDecl>(decl))
-                    {
-                        std::string typeName;
-                        llvm::raw_string_ostream typeOs(typeName);
-                        conv->getConversionType().print(typeOs, printPolicy);
-                        if (wantFullyQualifiedMethodName)
-                        {
-                            std::string className;
-                            llvm::raw_string_ostream classOs(className);
-                            conv->getParent()->printQualifiedName(classOs, printPolicy);
-                            return className + "::operator " + typeName;
-                        }
-                        return "operator " + typeName;
-                    }
+                    std::string typeName;
+                    llvm::raw_string_ostream typeOs(typeName);
+                    conv->getConversionType().print(typeOs, printPolicy);
                     if (wantFullyQualifiedMethodName)
                     {
-                        std::string out;
-                        llvm::raw_string_ostream os(out);
-                        decl->printQualifiedName(os, printPolicy);
-                        os.flush();
-                        return out;
+                        std::string className;
+                        llvm::raw_string_ostream classOs(className);
+                        conv->getParent()->printQualifiedName(classOs, printPolicy);
+                        fqn += className + "::operator " + typeName;
                     }
-                    return decl->getNameAsString();
-                }(funcDecl2, wantFullyQualifiedMethodName); // IILE invoked here
+                    else
+                        fqn += "operator " + typeName;
+                }
+                else if (wantFullyQualifiedMethodName)
+                {
+                    std::string              out;
+                    llvm::raw_string_ostream os(out);
+                    funcDecl2->printQualifiedName(os, printPolicy);
+                    os.flush();
+                    fqn += out;
+                }
+                else
+                    fqn += funcDecl2->getNameAsString();
 
                 if (const auto* args = funcDecl->getTemplateSpecializationArgs())
                 {
