@@ -340,4 +340,92 @@ Test AnonymousUdts[] =
             }
         }
     },
+    {"Used as a function return type", []
+        {
+            std::string code1 = "namespace { struct Config {  int width;  int height; }; } Config MakeConfig() { return {0,0}; }";
+            std::string code2 = "namespace { struct Config { char width; char height; }; } Config MakeConfig() { return {0,0}; }";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(1, maps.functionMap.size());
+            Assert::AreEqual("struct (anonymous namespace)::Config { // sizeof=8\n"
+                             "   int width;\n"
+                             "   int height;\n"
+                             "} __cdecl MakeConfig() { return {0, 0}; }"
+                           , maps.functionMap.begin()->second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code1);
+                Assert::AreEqual(0, violations, "wrong number of violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "these are overloads, not ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: MakeConfig()\n"
+                                "[tu3.cpp]\n"
+                                "struct (anonymous namespace)::Config { // sizeof=8\n"
+                                "   int width;\n"
+                                "   int height;\n"
+                                "} __cdecl MakeConfig() { return {0, 0}; }\n"
+                                "[tu4.cpp]\n"
+                                "struct (anonymous namespace)::Config { // sizeof=2\n"
+                                "   char width;\n"
+                                "   char height;\n"
+                                "} __cdecl MakeConfig() { return {0, 0}; }\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
+    {"Used as a function static const return type reference", []
+        {
+            std::string code1 = "namespace { struct Config {  int width;  int height; }; } const Config& MakeConfig() { static Config cfg{0, 0}; return cfg; }";
+            std::string code2 = "namespace { struct Config { char width; char height; }; } const Config& MakeConfig() { static Config cfg{0, 0}; return cfg; }";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(1, maps.functionMap.size());
+            Assert::AreEqual("const struct (anonymous namespace)::Config { // sizeof=8\n"
+                             "         int width;\n"
+                             "         int height;\n"
+                             "      } & __cdecl MakeConfig() {\n"
+                             "    static Config cfg{0, 0};\n"
+                             "    return cfg;\n"
+                             "}"
+                           , maps.functionMap.begin()->second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code1);
+                Assert::AreEqual(0, violations, "wrong number of violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "these are overloads, not ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: MakeConfig()\n"
+                                "[tu3.cpp]\n"
+                                "const struct (anonymous namespace)::Config { // sizeof=8\n"
+                                "         int width;\n"
+                                "         int height;\n"
+                                "      } & __cdecl MakeConfig() {\n"
+                                "    static Config cfg{0, 0};\n"
+                                "    return cfg;\n"
+                                "}\n"
+                                "[tu4.cpp]\n"
+                                "const struct (anonymous namespace)::Config { // sizeof=2\n"
+                                "         char width;\n"
+                                "         char height;\n"
+                                "      } & __cdecl MakeConfig() {\n"
+                                "    static Config cfg{0, 0};\n"
+                                "    return cfg;\n"
+                                "}\n", output, "mismatched output");
+            }
+        }
+    },
 };

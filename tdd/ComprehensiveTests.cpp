@@ -2501,8 +2501,8 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                 Assert::AreEqual(1, maps.functionMap.size());
                 auto it = maps.functionMap.begin();
                 Assert::AreEqual("const struct T9::(anonymous namespace)::Arg { // sizeof=4\n"
-                                 "   int x;\n"
-                                 "} * __cdecl T9::Foo() { return new Arg{}; }"
+                                 "         int x;\n"
+                                 "      } * __cdecl T9::Foo() { return new Arg{}; }"
                                , it->second[0].fullyQualified);
             }
         }

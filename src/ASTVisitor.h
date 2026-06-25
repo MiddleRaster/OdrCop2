@@ -472,7 +472,7 @@ namespace OdrCop2
                 const auto* recordType = dyn_cast<clang::RecordType>(qualType.getTypePtr());
                 if (recordType && recordType->getDecl()->isInAnonymousNamespace())
                 {
-                    std::string indentation(fqn.size(), ' ');
+                    std::string indentation(fqn.size() + par.ConstructPrefix().size(), ' ');
                     std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
                     bool first = true;
                     for (std::string line; std::getline(iss, line);)
@@ -1641,19 +1641,8 @@ namespace OdrCop2
                 if (items.size() < 2)
                     continue;
 
-                //if (true == skipAnonymous(items[0]))
-                //    continue;
-
                 if (std::all_of(items.begin() + 1, items.end(), [&](const auto& x) { return x == items[0]; }))
                     continue;
-
-                // find mismatch index
-                //int mismatch = -1;
-                //for (size_t m = 1; m < items.size(); ++m)
-                //{
-                //    if (-1 != (mismatch = getMismatchIndex(items[0], items[m])))
-                //        break;
-                //}
 
                 ++violationCount;
                 out << "\nODR VIOLATION: " << name << '\n';
