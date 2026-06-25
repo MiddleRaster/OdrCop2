@@ -2294,13 +2294,13 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                                 "ODR VIOLATION: T7::Public\n"
                                 "[tu3.cpp]\n"
                                 "struct T7::Public : public struct T7::(anonymous namespace)::Base { // sizeof=4\n"
-                                "                       int x;\n"
-                                "                    } { // sizeof=4\n"
+                                "                              int x;\n"
+                                "                           } { // sizeof=4\n"
                                 "};\n"
                                 "[tu4.cpp]\n"
                                 "struct T7::Public : public struct T7::(anonymous namespace)::Base { // sizeof=8\n"
-                                "                       double y;\n"
-                                "                    } { // sizeof=8\n"
+                                "                              double y;\n"
+                                "                           } { // sizeof=8\n"
                                 "};\n", output);
                 Assert::AreEqual(1, violations, "wrong number of ODR violations");
             }
@@ -2311,13 +2311,13 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                                 "ODR VIOLATION: T7::Public\n"
                                 "[tu3.cpp]\n"
                                 "struct T7::Public : public struct T7::(anonymous namespace)::Base { // sizeof=4\n"
-                                "                       int x;\n"
-                                "                    } { // sizeof=4\n"
+                                "                              int x;\n"
+                                "                           } { // sizeof=4\n"
                                 "};\n"
                                 "[tu4.cpp]\n"
                                 "struct T7::Public : public struct T7::(anonymous namespace)::Base { // sizeof=4\n"
-                                "                       int y;\n"
-                                "                    } { // sizeof=4\n"
+                                "                              int y;\n"
+                                "                           } { // sizeof=4\n"
                                 "};\n", output);
                 Assert::AreEqual(1, violations, "wrong number of ODR violations");
             }

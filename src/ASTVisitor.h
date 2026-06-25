@@ -1030,15 +1030,21 @@ namespace OdrCop2
             out += " ";
 
             // base classes
-            std::string indentation(out.size()+2, ' '); // +2 to get to the ": "
+            std::string indentToColon(out.size(), ' ');
+            bool previousWasAnonymous = false;
             bool firstBase = true;
             for (const clang::CXXBaseSpecifier& base : recordDecl->bases())
             {
                 if (firstBase) {
-                    out += ": ";
                     firstBase = false;
-                } else
+                    out += ": ";
+                } else {
+                    if (previousWasAnonymous) {
+                        previousWasAnonymous = false;
+                        out += "\n" + indentToColon;
+                    }
                     out += ", ";
+                }
 
                 switch (base.getAccessSpecifier()) {
                 case clang::AS_public:    out += "public ";    break;
@@ -1054,6 +1060,9 @@ namespace OdrCop2
                 const auto* recordType  = dyn_cast<RecordType>(type);
                 if (recordType && recordType->getDecl()->isInAnonymousNamespace())
                 {
+                    previousWasAnonymous = true;
+                    std::string indentation(out.size() - (out.rfind('\n') + 1), ' '); // length of last line up to current spot
+
                     // recurse but indent
                     std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
                     bool first = true;
