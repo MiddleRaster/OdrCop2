@@ -6,7 +6,6 @@ using namespace TDD20;
 
 #include "..\src\ASTVisitor.h"
 
-#ifdef TEST_MATRIX_DOCS
 /*
 Legend:
 •	✓ = meaningful, distinct test case
@@ -42,7 +41,6 @@ Using-declaration                       |	Usually reduces to one of the above ca
 Lambda closure type                     |	Better tested as its own category, not as an anonymous-namespace type.  |
 Anonymous namespace namespace itself    |	Not an entity type.                                                     |
 */
-#endif  
 
 extern std::pair<int, std::string> RunTest(const std::string& code1, const std::string& code2);
 
@@ -283,6 +281,62 @@ Test AnonymousUdts[] =
                                 "                        } { // sizeof=12\n"
                                 "   int width;\n"
                                 "};\n", output, "mismatched output");
+            }
+        }
+    },
+    {"Used as a function argument", []
+        {
+            std::string code1 = "namespace { struct Config { int width; int height;            }; } void Render(Config cfg, int flags) { (void)flags; }";
+            std::string code2 = "namespace { struct Config { int width; int height; int depth; }; } void Render(Config cfg, int flags) { (void)flags; };";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(1, maps.functionMap.size());
+            Assert::AreEqual("void __cdecl Render(struct (anonymous namespace)::Config { // sizeof=8\n"
+                             "                       int width;\n"
+                             "                       int height;\n"
+                             "                    } cfg, int flags) { (void)flags; }"
+                           , maps.functionMap.begin()->second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code1);
+                Assert::AreEqual(0, violations, "wrong number of violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(0, violations, "these are overloads, not ODR violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+        }
+    },
+    {"Used as a function argument const&", []
+        {
+            std::string code1 = "namespace { struct Config { int width; int height;            }; } void Render(const Config& cfg, int flags) { (void)flags; }";
+            std::string code2 = "namespace { struct Config { int width; int height; int depth; }; } void Render(const Config& cfg, int flags) { (void)flags; };";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(1, maps.functionMap.size());
+            Assert::AreEqual("void __cdecl Render(const struct (anonymous namespace)::Config { // sizeof=8\n"
+                             "                             int width;\n"
+                             "                             int height;\n"
+                             "                          } & cfg, int flags) { (void)flags; }"
+                           , maps.functionMap.begin()->second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code1);
+                Assert::AreEqual(0, violations, "wrong number of violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(0, violations, "these are overloads, not ODR violations");
+                Assert::AreEqual("", output, "mismatched output");
             }
         }
     },

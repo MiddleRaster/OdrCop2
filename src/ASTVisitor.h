@@ -559,15 +559,14 @@ namespace OdrCop2
 
             for (const ParmVarDecl* param : funcDecl->parameters())
             {
-                std::string indentation(fqn.size(), ' ');
-
                 QualType qualType       = param->getType().getCanonicalType();
-                PointersAndReferences par(qualType);
-
+                PointersAndReferences par(qualType); // modifies qualType
                 const clang::Type* type = qualType.getTypePtr();
                 const auto*  recordType = dyn_cast<clang::RecordType>(type);
                 if (recordType && recordType->getDecl()->isInAnonymousNamespace())
                 {
+                    std::string indentation(fqn.size() + par.ConstructPrefix().size(), ' ');
+
                     // recurse but indent
                     std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
                     bool first = true;
