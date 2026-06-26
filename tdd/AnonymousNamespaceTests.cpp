@@ -600,4 +600,115 @@ Test AnonymousUdts[] =
         }
     },
 
+    {"Used as a template type arg of a function template", []
+        {
+            std::string code1 = "namespace { struct Foo { int  x; }; } template <typename T> void Process(T val) {} void CallProcess() { Process(Foo{42}); }";
+            std::string code2 = "namespace { struct Foo { char x; }; } template <typename T> void Process(T val) {} void CallProcess() { Process(Foo{42}); }";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(0, maps.udtMap.size());
+            Assert::AreEqual(3, maps.functionMap.size());
+
+            auto it = maps.functionMap.begin();
+            Assert::AreEqual("void __cdecl CallProcess() { Process(Foo{42}); }", (*it++).second[0].fullyQualified, "serialization");
+            Assert::AreEqual("void __cdecl Process<struct (anonymous namespace)::Foo { // sizeof=4\n"
+                             "                        int x;\n"
+                             "                     }>(struct (anonymous namespace)::Foo { // sizeof=4\n"
+                             "                           int x;\n"
+                             "                        } val) {}"
+                           , (*it++).second[0].fullyQualified, "serialization");
+            Assert::AreEqual("template <typename T> void __cdecl Process(T val) {}"
+                           , (*it++).second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code1);
+                Assert::AreEqual(0, violations, "wrong number of violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(0, violations, "these are overloads, not ODR violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+        }
+    },
+    {"Used as a template type arg of a function template, pointer variation", []
+        {
+            std::string code1 = "namespace { struct Foo { int  x; }; } template <typename T> void Process(T* val) {} void CallProcess() { Foo f; Process(&f); }";
+            std::string code2 = "namespace { struct Foo { char x; }; } template <typename T> void Process(T* val) {} void CallProcess() { Foo f; Process(&f); }";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(0, maps.udtMap.size());
+            Assert::AreEqual(3, maps.functionMap.size());
+
+            auto it = maps.functionMap.begin();
+            Assert::AreEqual("void __cdecl CallProcess() {\n"
+                             "    Foo f;\n"
+                             "    Process(&f);\n"
+                             "}"
+                           , (*it++).second[0].fullyQualified, "serialization");
+            Assert::AreEqual("void __cdecl Process<struct (anonymous namespace)::Foo { // sizeof=4\n"
+                             "                        int x;\n"
+                             "                     }>(struct (anonymous namespace)::Foo { // sizeof=4\n"
+                             "                           int x;\n"
+                             "                        } * val) {}"
+                           , (*it++).second[0].fullyQualified, "serialization");
+            Assert::AreEqual("template <typename T> void __cdecl Process(T * val) {}"
+                           , (*it++).second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code1);
+                Assert::AreEqual(0, violations, "wrong number of violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(0, violations, "these are overloads, not ODR violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+        }
+    },
+    {"Used as a template type arg of a function template, const reference version", []
+        {
+            std::string code1 = "namespace { struct Foo { int  x; }; } template <typename T> void Process(const T& val) {} void CallProcess() { Process(Foo{42}); }";
+            std::string code2 = "namespace { struct Foo { char x; }; } template <typename T> void Process(const T& val) {} void CallProcess() { Process(Foo{42}); }";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(0, maps.udtMap.size());
+            Assert::AreEqual(3, maps.functionMap.size());
+
+            auto it = maps.functionMap.begin();
+            Assert::AreEqual("void __cdecl CallProcess() { Process(Foo{42}); }"
+                          , (*it++).second[0].fullyQualified, "serialization");
+            Assert::AreEqual("void __cdecl Process<struct (anonymous namespace)::Foo { // sizeof=4\n"
+                             "                        int x;\n"
+                             "                     }>(const struct (anonymous namespace)::Foo { // sizeof=4\n"
+                             "                                 int x;\n"
+                             "                              } & val) {}"
+                           , (*it++).second[0].fullyQualified, "serialization");
+            Assert::AreEqual("template <typename T> void __cdecl Process(const T & val) {}"
+                           , (*it++).second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code1);
+                Assert::AreEqual(0, violations, "wrong number of violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(0, violations, "these are overloads, not ODR violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+        }
+    },
+
 };

@@ -577,15 +577,43 @@ namespace OdrCop2
                 if (const auto* args = funcDecl->getTemplateSpecializationArgs())
                 {
                     fqn += "<";
-                    llvm::raw_string_ostream  os2(fqn);
                     bool first = true;
                     for (const TemplateArgument& arg : args->asArray())
                     {
                         if (!first)
                             fqn += ", ";
-                        arg.print(printPolicy, os2, true);
-                        os2.flush();
                         first = false;
+
+                        bool handled = false;
+                        if (arg.getKind() == TemplateArgument::Type)
+                        {
+                            QualType qt = arg.getAsType();
+                            if (const auto* rd = qt.getTypePtr()->getAsCXXRecordDecl())
+                            {
+                                if (rd->isInAnonymousNamespace() && rd->getIdentifier() != nullptr)
+                                {
+                                    std::string indentation(fqn.size(), ' ');
+                                    std::istringstream iss(ConstructRecordSignature(rd));
+                                    bool              firstLine = true;
+                                    for (std::string line; std::getline(iss, line);)
+                                    {
+                                        if (firstLine) {
+                                            firstLine = false;
+                                            fqn +=               line + "\n";
+                                        } else
+                                            fqn += indentation + line + "\n";
+                                    }
+                                    fqn = fqn.substr(0, fqn.size() - 2); // strip last ";\n"
+                                    handled = true;
+                                }
+                            }
+                        }
+                        if (!handled)
+                        {
+                            llvm::raw_string_ostream os2(fqn);
+                            arg.print(printPolicy, os2, true);
+                            os2.flush();
+                        }
                     }
                     fqn += ">";
                 }
@@ -602,7 +630,7 @@ namespace OdrCop2
                 const auto*  recordType = dyn_cast<clang::RecordType>(type);
                 if (recordType && recordType->getDecl()->isInAnonymousNamespace())
                 {
-                    std::string indentation(fqn.size() + par.ConstructPrefix().size(), ' ');
+                    std::string indentation(fqn.size() - (fqn.rfind('\n') + 1) + par.ConstructPrefix().size(), ' '); // length of last line up to current spot
 
                     // recurse but indent
                     std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
