@@ -2179,12 +2179,22 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
     //        Assert::AreEqual(0, violations, "wrong number of ODR violations");
     //    }
     //},
-    {"Test 1 - Top-level anonymous type, different layouts. OdrCop2 should NOT flag", []
+    {"Test 1 - Top-level anonymous type, different layouts. OdrCop2 SHOULD flag", [] // this is a change; Codex convinced me that the standard is tricky here and I decided to be conservative
         {
             const auto& [violations, output] = RunTest ("namespace Tests { namespace T1 { namespace { struct Empty { int x;    }; } Empty t1_instance; } }"
                                                       , "namespace Tests { namespace T1 { namespace { struct Empty { double y; }; } Empty t1_instance; } }");
-            Assert::AreEqual("", output);
-            Assert::AreEqual(0, violations, "wrong number of ODR violations");
+            Assert::AreEqual("\n"
+                            "ODR VIOLATION: Tests::T1::t1_instance\n"
+                            "[tu3.cpp]\n"
+                            "struct Tests::T1::(anonymous namespace)::Empty { // sizeof=4\n"
+                            "   int x;\n"
+                            "} Tests::T1::t1_instance;\n"
+                            "[tu4.cpp]\n"
+                            "struct Tests::T1::(anonymous namespace)::Empty { // sizeof=8\n"
+                            "   double y;\n"
+                            "} Tests::T1::t1_instance;\n"
+                          , output);
+            Assert::AreEqual(1, violations, "wrong number of ODR violations");
         }
     },
     {"Test 2 - Anonymous type inside external-linkage struct, different layouts. OdrCop2 SHOULD flag", []

@@ -428,4 +428,84 @@ Test AnonymousUdts[] =
             }
         }
     },
+    {"Used as an external-linkage global", []
+        {
+            std::string code1 = "namespace { struct Config {  int width;  int height; }; } Config g_cfg;";
+            std::string code2 = "namespace { struct Config { char width; char height; }; } Config g_cfg;;";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(1, maps.varMap.size());
+            Assert::AreEqual("struct (anonymous namespace)::Config { // sizeof=8\n"
+                             "   int width;\n"
+                             "   int height;\n"
+                             "} g_cfg;"
+                           , maps.varMap.begin()->second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code1);
+                Assert::AreEqual(0, violations, "wrong number of violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "these are overloads, not ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: g_cfg\n"
+                                "[tu3.cpp]\n"
+                                "struct (anonymous namespace)::Config { // sizeof=8\n"
+                                "   int width;\n"
+                                "   int height;\n"
+                                "} g_cfg;\n"
+                                "[tu4.cpp]\n"
+                                "struct (anonymous namespace)::Config { // sizeof=2\n"
+                                "   char width;\n"
+                                "   char height;\n"
+                                "} g_cfg;\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
+    {"Used as an external-linkage global const pointer", []
+        {
+            std::string code1 = "namespace { struct Config {  int width;  int height; }; } const Config* g_cfg;";
+            std::string code2 = "namespace { struct Config { char width; char height; }; } const Config* g_cfg;";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(1, maps.varMap.size());
+            Assert::AreEqual("const struct (anonymous namespace)::Config { // sizeof=8\n"
+                             "         int width;\n"
+                             "         int height;\n"
+                             "      } * g_cfg;"
+                           , maps.varMap.begin()->second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code1);
+                Assert::AreEqual(0, violations, "wrong number of violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "these are overloads, not ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: g_cfg\n"
+                                "[tu3.cpp]\n"
+                                "const struct (anonymous namespace)::Config { // sizeof=8\n"
+                                "         int width;\n"
+                                "         int height;\n"
+                                "      } * g_cfg;\n"
+                                "[tu4.cpp]\n"
+                                "const struct (anonymous namespace)::Config { // sizeof=2\n"
+                                "         char width;\n"
+                                "         char height;\n"
+                                "      } * g_cfg;\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
 };

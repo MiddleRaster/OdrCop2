@@ -138,27 +138,56 @@ namespace OdrCop2
                 return true; // local variables can't be ODR violations
             if (isa<CXXRecordDecl>(varDecl->getDeclContext()))
                 return true; // struct/class statics:  already done during CXXRecordDecl parsing
-            if (varDecl->getLinkageAndVisibility().getLinkage() != clang::Linkage::External)
+            auto linkage = varDecl->getLinkageAndVisibility().getLinkage();
+            if (linkage != clang::Linkage::External &&
+                linkage != clang::Linkage::UniqueExternal)
                 return true; // internal linkage (anon namespace, static, const at file scope, etc.)
 
+            std::string key = varDecl->getQualifiedNameAsString();
             std::string out;
 
             if (varDecl->isInline())
                 out = "inline ";
             if (varDecl->isConstexpr())
                 out += "constexpr ";
-            
-            if (varDecl->getType()->getAsCXXRecordDecl() &&
-                varDecl->getType()->getAsCXXRecordDecl()->isLambda())
-                out += "auto";
+
+            std::string ptrSuffix;
+            QualType qt = varDecl->getType();
+            while (!qt->getPointeeType().isNull())
+            {
+                ptrSuffix = std::string(qt.isConstQualified() ? " const" : "") + std::string(qt->isPointerType() ? " *" : " &") + ptrSuffix;
+                qt = qt->getPointeeType();
+            }
+
+            std::string cvPrefix;
+            if (qt.isConstQualified())    cvPrefix += "const ";
+            if (qt.isVolatileQualified()) cvPrefix += "volatile ";
+            qt = qt.getUnqualifiedType();
+
+            CXXRecordDecl* record = qt->getAsCXXRecordDecl();
+            if (record &&
+                record->isInAnonymousNamespace() &&
+                record->getIdentifier() != nullptr)
+            {
+                out += cvPrefix;
+                std::string indentation(out.size(), ' ');
+                std::istringstream iss(ConstructRecordSignature(record));
+                bool first = true;
+                for (std::string line; std::getline(iss, line);)
+                {
+                    if (first) {
+                        first = false;
+                        out +=               line + "\n";
+                    } else
+                        out += indentation + line + "\n";
+                }
+                out = out.substr(0, out.size() - 2); // strip last ";\n"
+                out += ptrSuffix + " " + key;
+            }
+            else if (record && record->isLambda())
+                out += "auto " + key;
             else
-                out += varDecl->getType().getUnqualifiedType().getAsString(printPolicy);
-
-            out += " ";
-
-            std::string key = varDecl->getQualifiedNameAsString();
-            out += key;
-
+                out += varDecl->getType().getUnqualifiedType().getAsString(printPolicy) + " " + key;
 
             if (varDecl->getInit())
             {
@@ -189,7 +218,6 @@ namespace OdrCop2
                     }
                     else
                     {
-                        SourceLocation afterName = nameLoc.getLocWithOffset((SourceLocation::IntTy)varDecl->getName().size());
                         std::string text = Lexer::getSourceText(CharSourceRange::getTokenRange(nameLoc, endLoc), context->getSourceManager(), context->getLangOpts()).str();
                         StringRef suffix = StringRef(text).drop_front(varDecl->getName().size()).ltrim();
                         if (suffix.starts_with("{"))
