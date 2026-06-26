@@ -292,19 +292,28 @@ namespace OdrCop2
                 case clang::TemplateArgument::TemplateExpansion: out += arg.getAsTemplateOrTemplatePattern().getAsTemplateDecl()->getQualifiedNameAsString() + "..."; break;
                 case clang::TemplateArgument::Type:
                 {
-                    bool isInAnonymousNamespace = false;
-                    if (const auto* rd = arg.getAsType()->getAsCXXRecordDecl())
-                    if (rd->isInAnonymousNamespace())
-                        isInAnonymousNamespace = true;
-
-                    if (wantAnonymousNamespaceWithTU && isInAnonymousNamespace)
+                    const auto* rd = arg.getAsType()->getAsCXXRecordDecl();
+                    if (rd && rd->isInAnonymousNamespace())
                     {
-                        std::string ans = arg.getAsType().getAsString();
-                        const std::string from = "anonymous namespace";
-                        if (auto pos = ans.find(from); pos != std::string::npos)
-                            ans.replace(pos, from.size(), "anonymous namespace in " + TU);
-                        out += ans;
-                    } else
+                        std::string indentation(out.size(), ' ');
+                        std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(rd)));
+                        bool first = true;
+                        for (std::string line; std::getline(iss, line);)
+                        {
+                            if (first) {
+                                first = false;
+                                if (wantAnonymousNamespaceWithTU) {
+                                    const std::string from = "anonymous namespace";
+                                    if (auto pos = line.find(from); pos != std::string::npos)
+                                        line.replace(pos, from.size(), "anonymous namespace in " + TU);
+                                }
+                                out += line + "\n";
+                            } else
+                                out += indentation + line + "\n";
+                        }
+                        out = out.substr(0, out.size()-2); // strip last ";\n"
+                    }
+                    else
                         out += arg.getAsType().getAsString();
                 }
                     break;
@@ -610,7 +619,37 @@ namespace OdrCop2
                     fqn  = fqn.substr(0, fqn.size()-2); // strip off last ";\n"
                     fqn += par.ConstructPointersAndReferences();
                 }
-                else
+                else if (recordType && dyn_cast<ClassTemplateSpecializationDecl>(recordType->getDecl()))
+                {
+                    const auto* spec = dyn_cast<ClassTemplateSpecializationDecl>(recordType->getDecl());
+
+                    // Check if any type arg is from an anonymous namespace
+                    bool hasAnonArg = false;
+                    for (const auto& arg : spec->getTemplateArgs().asArray())
+                        if (arg.getKind() == TemplateArgument::Type)
+                        if (const auto* rd = arg.getAsType()->getAsCXXRecordDecl())
+                        if (rd->isInAnonymousNamespace()) { 
+                            hasAnonArg = true; break;
+                        }
+                    if (hasAnonArg)
+                    {
+                        fqn += par.ConstructPrefix() + spec->getQualifiedNameAsString();
+                        std::string indentation(fqn.size(), ' ');
+                        std::istringstream iss(TemplateArgsToString(spec->getTemplateArgs(), false));
+                        bool first = true;
+                        for (std::string line; std::getline(iss, line);)
+                        {
+                            if (first) {
+                                first = false;
+                                fqn  +=               line + "\n";
+                            } else
+                                fqn  += indentation + line + "\n";
+                        }
+                        fqn = fqn.substr(0, fqn.size() - 2); // strip last ";\n"
+                        fqn += ">" + par.ConstructPointersAndReferences();
+                    } else
+                        fqn += param->getType().getAsString(printPolicy);
+                } else
                     fqn += param->getType().getAsString(printPolicy);
 
                 // if there is no parameter name, skip this
@@ -1052,7 +1091,21 @@ namespace OdrCop2
 
             // if it's a template instantiation, add <arg> 
             if (auto* CTSD = dyn_cast<ClassTemplateSpecializationDecl>(recordDecl))
-                out += TemplateArgsToString(CTSD->getTemplateArgs());
+            {
+                std::istringstream iss(TemplateArgsToString(CTSD->getTemplateArgs()));
+
+                bool first = true;
+                std::string indentation(out.size(), ' ');
+                for (std::string line; std::getline(iss, line);)
+                {
+                    if (first) {
+                        first = false;
+                        out +=               line + "\n"; // the first line is already indented
+                    } else
+                        out += indentation + line + "\n";
+                }
+                out = out.substr(0, out.size()-1); // strip off last "\n"
+            }
 
             out += " ";
 

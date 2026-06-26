@@ -508,4 +508,96 @@ Test AnonymousUdts[] =
             }
         }
     },
+    {"Used as a template type arg of a class template used as an argument to a function", []
+        {
+            std::string code1 = "namespace { struct Config { int width; int height;            }; } template<typename T> struct Box { T value; }; void Process(Box<Config> box) {}";
+            std::string code2 = "namespace { struct Config { int width; int height; int depth; }; } template<typename T> struct Box { T value; }; void Process(Box<Config> box) {}";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(2,  maps.udtMap.size());
+
+            auto it = maps.udtMap.begin();
+            Assert::AreEqual("template<typename T> struct Box {\n"
+                             "   T value;\n"
+                             "};"
+                           , (*it++).second[0].fullyQualified, "serialization");
+            Assert::AreEqual("template<> struct Box<struct (anonymous namespace)::Config { // sizeof=8\n"
+                             "                         int width;\n"
+                             "                         int height;\n"
+                             "                      }> { // sizeof=8\n"
+                             "   struct (anonymous namespace)::Config { // sizeof=8\n"
+                             "      int width;\n"
+                             "      int height;\n"
+                             "   } value;\n"
+                             "};"
+                           , (*it++).second[0].fullyQualified, "serialization");
+            Assert::AreEqual(1,  maps.functionMap.size());
+            Assert::AreEqual("void __cdecl Process(Box<struct (anonymous namespace)::Config { // sizeof=8\n"
+                             "                            int width;\n"
+                             "                            int height;\n"
+                             "                         }> box) {}"
+                , maps.functionMap.begin()->second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code1);
+                Assert::AreEqual(0, violations, "wrong number of violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(0, violations, "these are overloads, not ODR violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+        }
+    },
+    {"Used as a template type arg of a class template used as a const& argument to a function", []
+        {
+            std::string code1 = "namespace { struct Config { int width; int height;            }; } template<typename T> struct Box { T value; }; void Process(const Box<Config>& box) {}";
+            std::string code2 = "namespace { struct Config { int width; int height; int depth; }; } template<typename T> struct Box { T value; }; void Process(const Box<Config>& box) {}";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(1,  maps.udtMap.size()); 
+            // N.B.:  NOTE: just adding const& to the function's argument caused the Box<Config> to become an implicit instantiation which are never traversed at the top-level.
+
+            auto it = maps.udtMap.begin();
+            Assert::AreEqual("template<typename T> struct Box {\n"
+                             "   T value;\n"
+                             "};"
+                           , (*it++).second[0].fullyQualified, "serialization");
+            //Assert::AreEqual("template<> struct Box<struct (anonymous namespace)::Config { // sizeof=8\n" // see N.B. comment, above
+            //                 "                         int width;\n"
+            //                 "                         int height;\n"
+            //                 "                      }> { // sizeof=8\n"
+            //                 "   struct (anonymous namespace)::Config { // sizeof=8\n"
+            //                 "      int width;\n"
+            //                 "      int height;\n"
+            //                 "   } value;\n"
+            //                 "};"
+            //               , (*it++).second[0].fullyQualified, "serialization");
+            Assert::AreEqual(1,  maps.functionMap.size());
+            Assert::AreEqual("void __cdecl Process(const Box<struct (anonymous namespace)::Config { // sizeof=8\n"
+                             "                                  int width;\n"
+                             "                                  int height;\n"
+                             "                               }> & box) {}"
+                , maps.functionMap.begin()->second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code1);
+                Assert::AreEqual(0, violations, "wrong number of violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(0, violations, "these are overloads, not ODR violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+        }
+    },
+
 };
