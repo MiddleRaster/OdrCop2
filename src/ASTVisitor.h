@@ -135,10 +135,8 @@ namespace OdrCop2
                     return true; // inside a class template specialization or partial specialization
             }
 
-            std::string aliasName    = typedefDecl->getQualifiedNameAsString();
-            std::string resolvedType = typedefDecl->getUnderlyingType().getCanonicalType().getAsString(printPolicy);
-            std::string fqtd         = "using " + aliasName + " = " + resolvedType + "; // typedef " + resolvedType + " " + aliasName + ";";
-            maps.typedefMap[aliasName].push_back({TU, fqtd});
+            std::string aliasName = typedefDecl->getQualifiedNameAsString();
+            maps.typedefMap[aliasName].push_back({TU, ConstructTypedefSignature(typedefDecl)});
             return true;
         }
         bool VisitTypeAliasTemplateDecl(clang::TypeAliasTemplateDecl* tatDecl)
@@ -270,6 +268,40 @@ namespace OdrCop2
         }
 
     private:
+        std::string ConstructTypedefSignature(const clang::TypedefNameDecl* typedefDecl)
+        {
+            QualType underlying          = typedefDecl->getUnderlyingType().getCanonicalType();
+            const RecordType* recordType = underlying->getAs<RecordType>();
+
+            std::string aliasName    = typedefDecl->getQualifiedNameAsString();
+            std::string fqtd         = "using " + aliasName + " = ";
+            std::string resolvedType = underlying.getAsString(printPolicy);
+
+            if (recordType != nullptr &&
+                (recordType->getDecl()->isAnonymousStructOrUnion() || (dyn_cast<NamespaceDecl>(recordType->getDecl()->getDeclContext()) != nullptr &&
+                                                                       dyn_cast<NamespaceDecl>(recordType->getDecl()->getDeclContext())->isAnonymousNamespace())))
+            {
+                std::string indentation(fqtd.size(), ' ');
+
+                std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
+                bool first = true;
+                for (std::string line; std::getline(iss, line);)
+                {
+                    if (first) {
+                        first = false;
+                        fqtd +=               line + "\n";
+                    } else
+                        fqtd += indentation + line + "\n";
+                }
+                fqtd  = fqtd.substr(0, fqtd.size()-2); // strip last ";\n"
+                fqtd += "; // typedef " + resolvedType + " " + aliasName + ";";
+            }
+            else
+                fqtd += resolvedType + "; // typedef " + resolvedType + " " + aliasName + ";";
+
+            return fqtd;
+        }
+
         std::string makeUnnamedEnumKey(const clang::EnumDecl* enumDecl)
         {
             // 1. Build the fully qualified parent chain
@@ -1456,31 +1488,18 @@ namespace OdrCop2
 
                 if (auto* typedefDecl = dyn_cast<TypedefDecl>(decl))
                 {
-                    out += "   typedef ";
-                    std::string indentation(11, ' ');
-
-                    QualType underlying        = typedefDecl->getUnderlyingType();
-                    if (const auto* recordType = underlying->getAs<RecordType>())
+                    // recurse but indent
+                    bool first = true;
+                    std::string indentation(out.size() - (out.rfind('\n') + 1) + 3, ' '); // length of last line up to current spot (+3 for indenting)
+                    std::istringstream iss(ConstructTypedefSignature(typedefDecl));
+                    for (std::string line; std::getline(iss, line);)
                     {
-                        if (recordType->getDecl()->isInAnonymousNamespace())
-                        {
-                            // recurse but indent
-                            bool first = true;
-                            std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
-                            for (std::string line; std::getline(iss, line);)
-                            {
-                                if (first) {
-                                    first = false;
-                                    out +=               line + "\n";
-                                } else
-                                    out += indentation + line + "\n";
-                            }
-                            out  = out.substr(0, out.size()-2); // strip off last ";\n"
-                            out += " " + typedefDecl->getNameAsString() + ";\n";
-                            continue;
-                        }
+                        if (first) {
+                            first = false;
+                            out +=               line + "\n";
+                        } else
+                            out += indentation + line + "\n";
                     }
-                    out += typedefDecl->getUnderlyingType().getAsString(printPolicy) + " " + typedefDecl->getNameAsString() + ";\n";
                     continue;
                 }
                 if (auto* typeAliasDecl = dyn_cast<TypeAliasDecl>(decl))

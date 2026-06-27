@@ -569,20 +569,20 @@ Test ComprehensiveTests[] =
             Assert::AreEqual(2, violations, "wrong number of ODR violations");
             Assert::AreEqual("\n"
                             "ODR VIOLATION: DifferentTypedefTarget::Alias\n"
-                                            "[tu3.cpp]\n"
+                            "[tu3.cpp]\n"
                             "using DifferentTypedefTarget::Alias = int; // typedef int DifferentTypedefTarget::Alias;\n"
                             "[tu4.cpp]\n"
                             "using DifferentTypedefTarget::Alias = long; // typedef long DifferentTypedefTarget::Alias;\n"
-                                "\n"
+                            "\n"
                             "ODR VIOLATION: DifferentTypedefTarget\n"
                             "[tu3.cpp]\n"
                             "struct DifferentTypedefTarget { // sizeof=4\n"
-                            "   typedef int Alias;\n"
+                            "using DifferentTypedefTarget::Alias = int; // typedef int DifferentTypedefTarget::Alias;\n"
                             "   Alias value;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct DifferentTypedefTarget { // sizeof=4\n"
-                            "   typedef long Alias;\n"
+                            "using DifferentTypedefTarget::Alias = long; // typedef long DifferentTypedefTarget::Alias;\n"
                             "   Alias value;\n"
                             "};\n", output);
         }
@@ -1763,11 +1763,11 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                             "ODR VIOLATION: EnclosingTypedefDefinition\n"
                             "[tu3.cpp]\n"
                             "struct EnclosingTypedefDefinition { // sizeof=1\n"
-                            "   typedef SomeStructForTypedefTesting1 SameTypedefDifferentUnderlyingType;\n"
+                            "using EnclosingTypedefDefinition::SameTypedefDifferentUnderlyingType = SomeStructForTypedefTesting1; // typedef SomeStructForTypedefTesting1 EnclosingTypedefDefinition::SameTypedefDifferentUnderlyingType;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct EnclosingTypedefDefinition { // sizeof=1\n"
-                            "   typedef SomeStructForTypedefTesting2 SameTypedefDifferentUnderlyingType;\n"
+                            "using EnclosingTypedefDefinition::SameTypedefDifferentUnderlyingType = SomeStructForTypedefTesting2; // typedef SomeStructForTypedefTesting2 EnclosingTypedefDefinition::SameTypedefDifferentUnderlyingType;\n"
                             "};\n", output);
         }
     },
@@ -2670,20 +2670,30 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                                                       , "namespace { struct SomeStructForTypedefTesting { int x2; }; }"
                                                         "namespace T13 { struct AnonymousTypedefDefinition { typedef SomeStructForTypedefTesting SameTypedefDifferentUnderlyingType; }; }");
             Assert::AreEqual("\n"
+                            "ODR VIOLATION: T13::AnonymousTypedefDefinition::SameTypedefDifferentUnderlyingType\n"
+                            "[tu3.cpp]\n"
+                            "using T13::AnonymousTypedefDefinition::SameTypedefDifferentUnderlyingType = struct (anonymous namespace)::SomeStructForTypedefTesting { // sizeof=4\n"
+                            "                                                                               int x1;\n"
+                            "                                                                            }; // typedef (anonymous namespace)::SomeStructForTypedefTesting T13::AnonymousTypedefDefinition::SameTypedefDifferentUnderlyingType;\n"
+                            "[tu4.cpp]\n"
+                            "using T13::AnonymousTypedefDefinition::SameTypedefDifferentUnderlyingType = struct (anonymous namespace)::SomeStructForTypedefTesting { // sizeof=4\n"
+                            "                                                                               int x2;\n"
+                            "                                                                            }; // typedef (anonymous namespace)::SomeStructForTypedefTesting T13::AnonymousTypedefDefinition::SameTypedefDifferentUnderlyingType;\n"
+                            "\n"
                             "ODR VIOLATION: T13::AnonymousTypedefDefinition\n"
                             "[tu3.cpp]\n"
                             "struct T13::AnonymousTypedefDefinition { // sizeof=1\n"
-                            "   typedef struct (anonymous namespace)::SomeStructForTypedefTesting { // sizeof=4\n"
-                            "              int x1;\n"
-                            "           } SameTypedefDifferentUnderlyingType;\n"
+                            "using T13::AnonymousTypedefDefinition::SameTypedefDifferentUnderlyingType = struct (anonymous namespace)::SomeStructForTypedefTesting { // sizeof=4\n"
+                            "                                                                                  int x1;\n"
+                            "                                                                               }; // typedef (anonymous namespace)::SomeStructForTypedefTesting T13::AnonymousTypedefDefinition::SameTypedefDifferentUnderlyingType;\n"
                             "};\n"
                             "[tu4.cpp]\n"
                             "struct T13::AnonymousTypedefDefinition { // sizeof=1\n"
-                            "   typedef struct (anonymous namespace)::SomeStructForTypedefTesting { // sizeof=4\n"
-                            "              int x2;\n"
-                            "           } SameTypedefDifferentUnderlyingType;\n"
+                            "using T13::AnonymousTypedefDefinition::SameTypedefDifferentUnderlyingType = struct (anonymous namespace)::SomeStructForTypedefTesting { // sizeof=4\n"
+                            "                                                                                  int x2;\n"
+                            "                                                                               }; // typedef (anonymous namespace)::SomeStructForTypedefTesting T13::AnonymousTypedefDefinition::SameTypedefDifferentUnderlyingType;\n"
                             "};\n", output);
-            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual(2, violations, "wrong number of ODR violations");
         }
     },
     {"Test 13a - A using alias of a type inside an anonymous namespace. OdrCop SHOULD flag", []
@@ -2693,6 +2703,16 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                                                       , "namespace { struct SomeStructForAliasTesting { int x2; }; }"
                                                         "namespace T13 { struct AnonymousAliasDefinition { using SameAliasDifferentUnderlyingType = SomeStructForAliasTesting; }; }");
             Assert::AreEqual("\n"
+                            "ODR VIOLATION: T13::AnonymousAliasDefinition::SameAliasDifferentUnderlyingType\n"
+                            "[tu3.cpp]\n"
+                            "using T13::AnonymousAliasDefinition::SameAliasDifferentUnderlyingType = struct (anonymous namespace)::SomeStructForAliasTesting { // sizeof=4\n"
+                            "                                                                           int x1;\n"
+                            "                                                                        }; // typedef (anonymous namespace)::SomeStructForAliasTesting T13::AnonymousAliasDefinition::SameAliasDifferentUnderlyingType;\n"
+                            "[tu4.cpp]\n"
+                            "using T13::AnonymousAliasDefinition::SameAliasDifferentUnderlyingType = struct (anonymous namespace)::SomeStructForAliasTesting { // sizeof=4\n"
+                            "                                                                           int x2;\n"
+                            "                                                                        }; // typedef (anonymous namespace)::SomeStructForAliasTesting T13::AnonymousAliasDefinition::SameAliasDifferentUnderlyingType;\n"
+                            "\n"
                             "ODR VIOLATION: T13::AnonymousAliasDefinition\n"
                             "[tu3.cpp]\n"
                             "struct T13::AnonymousAliasDefinition { // sizeof=1\n"
@@ -2706,7 +2726,7 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
                             "                                               int x2;\n"
                             "                                            };\n"
                             "};\n", output);
-            Assert::AreEqual(1, violations, "wrong number of ODR violations");
+            Assert::AreEqual(2, violations, "wrong number of ODR violations");
         }
     },
 
