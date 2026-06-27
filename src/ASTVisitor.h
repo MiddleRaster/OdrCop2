@@ -127,6 +127,14 @@ namespace OdrCop2
                 if (tad->getDescribedAliasTemplate() != nullptr)
                     return true; // Skip the templated decl inside a TypeAliasTemplateDecl - handled below
 
+            if (typedefDecl->getDeclContext()->isRecord()) {
+                const auto* rd = llvm::cast<CXXRecordDecl>(typedefDecl->getDeclContext());
+                if (rd->getDescribedClassTemplate() != nullptr)
+                    return true; // inside a class template definition
+                if (const auto* spec = llvm::dyn_cast<ClassTemplateSpecializationDecl>(rd))
+                    return true; // inside a class template specialization or partial specialization
+            }
+
             std::string aliasName    = typedefDecl->getQualifiedNameAsString();
             std::string resolvedType = typedefDecl->getUnderlyingType().getCanonicalType().getAsString(printPolicy);
             std::string fqtd         = "using " + aliasName + " = " + resolvedType + "; // typedef " + resolvedType + " " + aliasName + ";";
