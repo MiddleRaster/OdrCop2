@@ -123,12 +123,38 @@ namespace OdrCop2
             if (typedefDecl->isImplicit())
                 return true;
 
+            if (const auto* tad = llvm::dyn_cast<TypeAliasDecl>(typedefDecl))
+                if (tad->getDescribedAliasTemplate() != nullptr)
+                    return true; // Skip the templated decl inside a TypeAliasTemplateDecl - handled below
+
             std::string aliasName    = typedefDecl->getQualifiedNameAsString();
             std::string resolvedType = typedefDecl->getUnderlyingType().getCanonicalType().getAsString(printPolicy);
             std::string fqtd         = "using " + aliasName + " = " + resolvedType + "; // typedef " + resolvedType + " " + aliasName + ";";
             maps.typedefMap[aliasName].push_back({TU, fqtd});
             return true;
         }
+        bool VisitTypeAliasTemplateDecl(clang::TypeAliasTemplateDecl* tatDecl)
+        {
+            if (context->getSourceManager().isInSystemHeader(tatDecl->getLocation()))
+                return true;
+
+            TypeAliasDecl* aliasDecl    = tatDecl->getTemplatedDecl();
+            std::string    aliasName    = tatDecl->getQualifiedNameAsString();
+            std::string    resolvedType = aliasDecl->getUnderlyingType().getAsString(printPolicy);
+
+            std::string params;
+            for (const NamedDecl* param : *tatDecl->getTemplateParameters())
+            {
+                if (!params.empty())
+                    params += ", ";
+                params += param->getNameAsString();
+            }
+
+            std::string fqtd = "template <" + params + "> using " + aliasName + " = " + resolvedType + "; // no typedef equivalent";
+            maps.typedefMap[aliasName].push_back({TU, fqtd});
+            return true;
+        }
+
         bool VisitVarDecl(const VarDecl* varDecl)
         {
             if (context->getSourceManager().isInSystemHeader(varDecl->getLocation()))

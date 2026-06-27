@@ -2066,22 +2066,22 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
     },
     {"Brace initialization works when initializing an inline global std::pair variable", []
         {
-            const auto& [violations, output] = RunTest ("#include <utility>\ninline std::pair<int, int> x{1, 2};"
-                                                      , "#include <utility>\ninline std::pair<int, int> x{2, 1};");
+            const auto& [violations, output] = RunTest ("template <class A, class B> struct Pair { A first; B second; }; inline Pair<int, int> x{1, 2};"
+                                                      , "template <class A, class B> struct Pair { A first; B second; }; inline Pair<int, int> x{2, 1};");
             Assert::AreEqual("\n"
                             "ODR VIOLATION: x\n"
                             "[tu3.cpp]\n"
-                            "inline std::pair<int, int> x{1, 2};\n"
+                            "inline Pair<int, int> x{1, 2};\n"
                             "[tu4.cpp]\n"
-                            "inline std::pair<int, int> x{2, 1};\n"
+                            "inline Pair<int, int> x{2, 1};\n"
                           , output);
             Assert::AreEqual(1, violations, "wrong number of ODR violations");
         }
     },
     {"Brace initialization works when initializing an inline global std::pair variable, take 2", []
         {
-            const auto& [violations, output] = RunTest ("#include <utility>\ninline std::pair<int, int> x{1,2};"
-                                                      , "#include <utility>\ninline std::pair<int, int> x{1, 2};"); // spaces are not an ODR violation
+            const auto& [violations, output] = RunTest ("template <class A, class B> struct Pair { A first; B second; }; inline Pair<int, int> x{1,2};"
+                                                      , "template <class A, class B> struct Pair { A first; B second; }; inline Pair<int, int> x{1, 2};"); // spaces are not an ODR violation
             Assert::AreEqual("", output);
             Assert::AreEqual(0, violations, "wrong number of ODR violations");
         }
@@ -2169,16 +2169,16 @@ Test ComprehensiveTests2[] = // TU1, TU2 tests
             Assert::AreEqual(0, violations, "wrong number of ODR violations");
         }
     },
-    //{"Mocking callable works", [] // no, it doesn't; I get:  "tu3.cpp:2:64: error: cannot mangle this pack expansion yet" which is a real bummer, because I use that a lot for TBCI
-    //    {
-    //        const auto& [violations, output] = RunTest ("#include <utility>\n"
-    //                              "template<auto Fn> struct Callable { template<typename... Args> decltype(auto) operator()(Args&&... args) const { return Fn(std::forward<Args>(args)...); } };"
-    //                                                  , "#include <utility>\n"
-    //                              "template<auto Fn> struct Callable { template<typename... Args> decltype(auto) operator()(Args&&... args) const { return Fn(std::forward<Args>(args)...); } };");
-    //        Assert::AreEqual("", output);
-    //        Assert::AreEqual(0, violations, "wrong number of ODR violations");
-    //    }
-    //},
+    {"Mocking callable works", []
+        {
+            const auto& [violations, output] = RunTest ("#include <utility>\n" // N.B.:  NOTE: don't do this as it slows down the tests a lot.
+                                  "template<auto Fn> struct Callable { template<typename... Args> decltype(auto) operator()(Args&&... args) const { return Fn(std::forward<Args>(args)...); } };"
+                                                      , "#include <utility>\n" // N.B.:  NOTE: don't do this as it slows down the tests a lot.
+                                  "template<auto Fn> struct Callable { template<typename... Args> decltype(auto) operator()(Args&&... args) const { return Fn(std::forward<Args>(args)...); } };");
+            Assert::AreEqual("", output);
+            Assert::AreEqual(0, violations, "wrong number of ODR violations");
+        }
+    },
     {"Test 1 - Top-level anonymous type, different layouts. OdrCop2 SHOULD flag", [] // this is a change; Codex convinced me that the standard is tricky here and I decided to be conservative
         {
             const auto& [violations, output] = RunTest ("namespace Tests { namespace T1 { namespace { struct Empty { int x;    }; } Empty t1_instance; } }"
