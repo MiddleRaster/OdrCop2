@@ -18,7 +18,7 @@ Test TypedefTests[] =
             Assert::IsTrue(ok);
             const auto& vec = maps.typedefMap.begin()->second;
             Assert::AreEqual(1, vec.size(), "there should be 1 element in vector of TypedefInfo structs");
-            Assert::AreEqual("INT = int", vec[0].fullyQualified, "should have found typedef");
+            Assert::AreEqual("using INT = int; // typedef int INT;", vec[0].fullyQualified, "should have found typedef");
         }
     },
 	{"can find using-style typedefs in the AST", []
@@ -30,7 +30,7 @@ Test TypedefTests[] =
             Assert::IsTrue(ok);
             const auto& vec = maps.typedefMap.begin()->second;
             Assert::AreEqual(1, vec.size(), "there should be 1 element in vector of TypedefInfo structs");
-            Assert::AreEqual("INT = int", vec[0].fullyQualified, "should have found typedef");
+            Assert::AreEqual("using INT = int; // typedef int INT;", vec[0].fullyQualified, "should have found typedef");
         }
     },
     {"can get a typedef's underlying type from another typedef", []
@@ -48,8 +48,8 @@ Test TypedefTests[] =
             auto it2 = std::next(it1);
 
             // alphabetized by key, so ANOTHER_INT comes first
-            Assert::AreEqual("ANOTHER_INT = int", it1->second[0].fullyQualified, "should have found typedef");
-            Assert::AreEqual(        "INT = int", it2->second[0].fullyQualified, "should have found using");
+            Assert::AreEqual("using ANOTHER_INT = int; // typedef int ANOTHER_INT;", it1->second[0].fullyQualified, "should have found typedef");
+            Assert::AreEqual(        "using INT = int; // typedef int INT;",         it2->second[0].fullyQualified, "should have found using");
         }
     },
 };

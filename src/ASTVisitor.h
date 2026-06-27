@@ -125,7 +125,7 @@ namespace OdrCop2
 
             std::string aliasName    = typedefDecl->getQualifiedNameAsString();
             std::string resolvedType = typedefDecl->getUnderlyingType().getCanonicalType().getAsString(printPolicy);
-            std::string fqtd         = aliasName + " = " + resolvedType;
+            std::string fqtd         = "using " + aliasName + " = " + resolvedType + "; // typedef " + resolvedType + " " + aliasName + ";";
             maps.typedefMap[aliasName].push_back({TU, fqtd});
             return true;
         }

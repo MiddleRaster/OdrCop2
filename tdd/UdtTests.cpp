@@ -304,7 +304,7 @@ Test UdtTests[] =
             ++it;
             Assert::AreEqual("template<typename T> struct StructT : private T {\n"
                              "};", it->second[0].fullyQualified, "can get struct refactored to TBCI");
-            Assert::AreEqual("Struct = StructT<Empty>", maps.typedefMap.begin()->second[0].fullyQualified, "can get typedef/alias");
+            Assert::AreEqual("using Struct = StructT<Empty>; // typedef StructT<Empty> Struct;", maps.typedefMap.begin()->second[0].fullyQualified, "can get typedef/alias");
         }
     },
 
