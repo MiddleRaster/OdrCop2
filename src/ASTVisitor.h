@@ -185,23 +185,11 @@ namespace OdrCop2
             qt = qt.getUnqualifiedType();
 
             CXXRecordDecl* record = qt->getAsCXXRecordDecl();
-            if (record &&
-                record->isInAnonymousNamespace() &&
-                record->getIdentifier() != nullptr)
+            if (record && record->isInAnonymousNamespace() && record->getIdentifier() != nullptr)
             {
                 out += cvPrefix;
-                std::string indentation(out.size(), ' ');
-                std::istringstream iss(ConstructRecordSignature(record));
-                bool first = true;
-                for (std::string line; std::getline(iss, line);)
-                {
-                    if (first) {
-                        first = false;
-                        out +=               line + "\n";
-                    } else
-                        out += indentation + line + "\n";
-                }
-                out = out.substr(0, out.size() - 2); // strip last ";\n"
+                out += IndentBlock(ConstructRecordSignature(record), out.size());
+                out  = out.substr(0, out.size()-2); // strip last ";\n"
                 out += ptrSuffix + " " + key;
             }
             else if (record && record->isLambda())
@@ -269,22 +257,10 @@ namespace OdrCop2
                 (recordType->getDecl()->isAnonymousStructOrUnion() || (dyn_cast<NamespaceDecl>(recordType->getDecl()->getDeclContext()) != nullptr &&
                                                                        dyn_cast<NamespaceDecl>(recordType->getDecl()->getDeclContext())->isAnonymousNamespace())))
             {
-                std::string indentation(fqtd.size(), ' ');
-
-                std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
-                bool first = true;
-                for (std::string line; std::getline(iss, line);)
-                {
-                    if (first) {
-                        first = false;
-                        fqtd +=               line + "\n";
-                    } else
-                        fqtd += indentation + line + "\n";
-                }
+                fqtd += IndentBlock(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())), fqtd.size());
                 fqtd  = fqtd.substr(0, fqtd.size()-2); // strip last ";\n"
                 fqtd += "; // typedef " + resolvedType + " " + aliasName + ";";
-            }
-            else
+            } else
                 fqtd += resolvedType + "; // typedef " + resolvedType + " " + aliasName + ";";
 
             return fqtd;
@@ -309,18 +285,8 @@ namespace OdrCop2
             const NamespaceDecl* nsDeclCtx  = recordType != nullptr ? dyn_cast<NamespaceDecl>(recordType->getDecl()->getDeclContext()) : nullptr;
             if (recordType != nullptr && (recordType->getDecl()->isAnonymousStructOrUnion() || (nsDeclCtx != nullptr && nsDeclCtx->isAnonymousNamespace())))
             {
-                std::string indentation(fqtd.size(), ' ');
-                std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
-                bool first = true;
-                for (std::string line; std::getline(iss, line);)
-                {
-                    if (first) {
-                        first = false;
-                        fqtd +=               line + "\n";
-                    } else
-                        fqtd += indentation + line + "\n";
-                }
-                fqtd = fqtd.substr(0, fqtd.size()-2); // strip last ";\n"
+                fqtd += IndentBlock(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())), fqtd.size());
+                fqtd  = fqtd.substr(0, fqtd.size()-2); // strip last ";\n"
                 fqtd += "; // no typedef equivalent";
             } else
                 fqtd += underlying.getAsString(printPolicy) + "; // no typedef equivalent";
@@ -387,25 +353,16 @@ namespace OdrCop2
                     const auto* rd = arg.getAsType()->getAsCXXRecordDecl();
                     if (rd && rd->isInAnonymousNamespace())
                     {
-                        std::string indentation(out.size(), ' ');
-                        std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(rd)));
-                        bool first = true;
-                        for (std::string line; std::getline(iss, line);)
+                        std::string line = IndentBlock(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(rd)), out.size());
+                        if (wantAnonymousNamespaceWithTU)
                         {
-                            if (first) {
-                                first = false;
-                                if (wantAnonymousNamespaceWithTU) {
-                                    const std::string from = "anonymous namespace";
-                                    if (auto pos = line.find(from); pos != std::string::npos)
-                                        line.replace(pos, from.size(), "anonymous namespace in " + TU);
-                                }
-                                out += line + "\n";
-                            } else
-                                out += indentation + line + "\n";
+                            const std::string from = "anonymous namespace";
+                            if (auto pos = line.find(from); pos != std::string::npos)
+                                line.replace(pos, from.size(), "anonymous namespace in " + TU);
                         }
-                        out = out.substr(0, out.size()-2); // strip last ";\n"
-                    }
-                    else
+                        out += line;
+                        out  = out.substr(0, out.size()-2); // strip last ";\n"
+                    } else
                         out += arg.getAsType().getAsString();
                 }
                     break;
@@ -684,18 +641,8 @@ namespace OdrCop2
                             {
                                 if (rd->isInAnonymousNamespace() && rd->getIdentifier() != nullptr)
                                 {
-                                    std::string indentation(fqn.size(), ' ');
-                                    std::istringstream iss(ConstructRecordSignature(rd));
-                                    bool              firstLine = true;
-                                    for (std::string line; std::getline(iss, line);)
-                                    {
-                                        if (firstLine) {
-                                            firstLine = false;
-                                            fqn +=               line + "\n";
-                                        } else
-                                            fqn += indentation + line + "\n";
-                                    }
-                                    fqn = fqn.substr(0, fqn.size() - 2); // strip last ";\n"
+                                    fqn += IndentBlock(ConstructRecordSignature(rd), fqn.size());
+                                    fqn  = fqn.substr(0, fqn.size() - 2); // strip last ";\n"
                                     handled = true;
                                 }
                             }
@@ -754,18 +701,8 @@ namespace OdrCop2
                     if (hasAnonArg)
                     {
                         fqn += par.ConstructPrefix() + spec->getQualifiedNameAsString();
-                        std::string indentation(fqn.size(), ' ');
-                        std::istringstream iss(TemplateArgsToString(spec->getTemplateArgs(), false));
-                        bool first = true;
-                        for (std::string line; std::getline(iss, line);)
-                        {
-                            if (first) {
-                                first = false;
-                                fqn  +=               line + "\n";
-                            } else
-                                fqn  += indentation + line + "\n";
-                        }
-                        fqn = fqn.substr(0, fqn.size() - 2); // strip last ";\n"
+                        fqn += IndentBlock(TemplateArgsToString(spec->getTemplateArgs(), false), fqn.size());
+                        fqn  = fqn.substr(0, fqn.size() - 2); // strip last ";\n"
                         fqn += ">" + par.ConstructPointersAndReferences();
                     } else
                         fqn += param->getType().getAsString(printPolicy);
@@ -1212,19 +1149,8 @@ namespace OdrCop2
             // if it's a template instantiation, add <arg> 
             if (auto* CTSD = dyn_cast<ClassTemplateSpecializationDecl>(recordDecl))
             {
-                std::istringstream iss(TemplateArgsToString(CTSD->getTemplateArgs()));
-
-                bool first = true;
-                std::string indentation(out.size(), ' ');
-                for (std::string line; std::getline(iss, line);)
-                {
-                    if (first) {
-                        first = false;
-                        out +=               line + "\n"; // the first line is already indented
-                    } else
-                        out += indentation + line + "\n";
-                }
-                out = out.substr(0, out.size()-1); // strip off last "\n"
+                out += IndentBlock(TemplateArgsToString(CTSD->getTemplateArgs()), out.size());
+                out  = out.substr(0, out.size()-1); // strip off last "\n"
             }
 
             out += " ";
@@ -1261,21 +1187,8 @@ namespace OdrCop2
                 if (recordType && recordType->getDecl()->isInAnonymousNamespace())
                 {
                     previousWasAnonymous = true;
-                    std::string indentation(out.size() - (out.rfind('\n') + 1), ' '); // length of last line up to current spot
-
-                    // recurse but indent
-                    std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
-                    bool first = true;
-                    for (std::string line; std::getline(iss, line);)
-                    {
-                        if (first) {
-                            first = false;
-                            out += line + "\n"; // the first line is already indented
-                        }
-                        else
-                            out += indentation + line + "\n";
-                    }
-                    out = out.substr(0, out.size()-2); // strip off last ";\n"
+                    out += IndentBlock(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())), out.size() - (out.rfind('\n') + 1));  // length of last line up to current spot
+                    out  = out.substr(0, out.size()-2); // strip off last ";\n"
                 }
                 else
                     out += base.getType().getAsString(printPolicy);
@@ -1514,18 +1427,7 @@ namespace OdrCop2
 
                 if (auto* typedefDecl = dyn_cast<TypedefDecl>(decl))
                 {
-                    // recurse but indent
-                    bool first = true;
-                    std::string indentation(out.size() - (out.rfind('\n') + 1) + 3, ' '); // length of last line up to current spot (+3 for indenting)
-                    std::istringstream iss(ConstructTypedefSignature(typedefDecl));
-                    for (std::string line; std::getline(iss, line);)
-                    {
-                        if (first) {
-                            first = false;
-                            out +=               line + "\n";
-                        } else
-                            out += indentation + line + "\n";
-                    }
+                    out += IndentBlock(ConstructTypedefSignature(typedefDecl), out.size() - (out.rfind('\n') + 1) + 3); // length of last line up to current spot (+3 for indenting)
                     continue;
                 }
                 if (auto* typeAliasDecl = dyn_cast<TypeAliasDecl>(decl))
@@ -1536,18 +1438,8 @@ namespace OdrCop2
                     {
                         if (recordType->getDecl()->isInAnonymousNamespace())
                         {
-                            std::string indentation(12 + aliasName.size(), ' '); // "   using X = "
-                            bool        first = true;
-                            std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
                             out += "   using " + aliasName + " = ";
-                            for (std::string line; std::getline(iss, line);)
-                            {
-                                if (first) {
-                                    first = false;
-                                    out +=               line + "\n";
-                                } else
-                                    out += indentation + line + "\n";
-                            }
+                            out += IndentBlock(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())), 12 + aliasName.size());
                             continue;
                         }
                     }
@@ -1555,18 +1447,8 @@ namespace OdrCop2
                     continue;
                 }
                 if (const auto* tatDecl = dyn_cast<TypeAliasTemplateDecl>(decl))
-                {   // recurse but indent
-                    bool first = true;
-                    std::string indentation(out.size() - (out.rfind('\n') + 1), ' '); // length of last line up to current spot
-                    std::istringstream iss(ConstructTemplateAliasSignature(tatDecl));
-                    for (std::string line; std::getline(iss, line);)
-                    {
-                        if (first) {
-                            first = false;
-                            out +=               line + "\n";
-                        } else
-                            out += indentation + line + "\n";
-                    }
+                {
+                    out += IndentBlock(ConstructTemplateAliasSignature(tatDecl), out.size() - (out.rfind('\n') + 1)); // length of last line up to current spot
                     continue;
                 }
                     
@@ -1789,6 +1671,24 @@ namespace OdrCop2
             std::string out;
             for(const auto* attr : decl->attrs())
                 out += ConstructAttribute(attr);
+            return out;
+        }
+    private:
+        static std::string IndentBlock(const std::string& block, size_t indentWidth)
+        {
+            std::istringstream iss(block);
+            std::string indentation(indentWidth, ' ');
+            std::string out;
+            bool first = true;
+            for (std::string line; std::getline(iss, line);)
+            {
+                if (first) {
+                    first = false;
+                    out += line + "\n";
+                }
+                else
+                    out += indentation + line + "\n";
+            }
             return out;
         }
     };
