@@ -144,10 +144,6 @@ namespace OdrCop2
             if (context->getSourceManager().isInSystemHeader(tatDecl->getLocation()))
                 return true;
 
-            TypeAliasDecl* aliasDecl    = tatDecl->getTemplatedDecl();
-            std::string    aliasName    = tatDecl->getQualifiedNameAsString();
-            std::string    resolvedType = aliasDecl->getUnderlyingType().getAsString(printPolicy);
-
             std::string params;
             for (const NamedDecl* param : *tatDecl->getTemplateParameters())
             {
@@ -156,7 +152,32 @@ namespace OdrCop2
                 params += param->getNameAsString();
             }
 
-            std::string fqtd = "template <" + params + "> using " + aliasName + " = " + resolvedType + "; // no typedef equivalent";
+            TypeAliasDecl* aliasDecl = tatDecl->getTemplatedDecl();
+            std::string    aliasName = tatDecl->getQualifiedNameAsString();
+
+            std::string fqtd = "template <" + params + "> using " + aliasName + " = ";
+            
+            QualType             underlying = aliasDecl->getUnderlyingType();
+            const RecordType   * recordType = underlying.getCanonicalType()->getAs<RecordType>();
+            const NamespaceDecl* nsDeclCtx  = recordType != nullptr ? dyn_cast<NamespaceDecl>(recordType->getDecl()->getDeclContext()) : nullptr;
+            if (recordType != nullptr && (recordType->getDecl()->isAnonymousStructOrUnion() || (nsDeclCtx != nullptr && nsDeclCtx->isAnonymousNamespace())))
+            {
+                std::string indentation(fqtd.size(), ' ');
+                std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
+                bool first = true;
+                for (std::string line; std::getline(iss, line);)
+                {
+                    if (first) {
+                        first  = false;
+                        fqtd  += line + "\n";
+                    } else
+                        fqtd += indentation + line + "\n";
+                }
+                fqtd = fqtd.substr(0, fqtd.size()-2); // strip last ";\n"
+                fqtd += "; // no typedef equivalent";
+            }
+            else
+                fqtd += underlying.getAsString(printPolicy) + "; // no typedef equivalent";
             maps.typedefMap[aliasName].push_back({TU, fqtd});
             return true;
         }

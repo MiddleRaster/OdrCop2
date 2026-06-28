@@ -762,4 +762,107 @@ Test AnonymousUdts[] =
             }
         }
     },
+    {"Used as an underlying type of a using alias", []
+        {
+            std::string code1 = "namespace { struct Impl { int x; int y;        }; } using MyImpl = Impl; extern void consume(MyImpl*); void consume(MyImpl* p) { (void)p; }";
+            std::string code2 = "namespace { struct Impl { int x; int y; int z; }; } using MyImpl = Impl; extern void consume(MyImpl*);"; // note that consume is extern, no need to repeat it here
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(0, maps.udtMap.size());
+            Assert::AreEqual(0, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(1, maps.typedefMap.size());
+            Assert::AreEqual(1, maps.functionMap.size());
+
+            Assert::AreEqual("void __cdecl consume(struct (anonymous namespace)::Impl { // sizeof=8\n"
+                             "                        int x;\n"
+                             "                        int y;\n"
+                             "                     } * p) { (void)p; }"
+                           , maps.functionMap.begin()->second[0].fullyQualified, "serialization");
+            Assert::AreEqual("using MyImpl = struct (anonymous namespace)::Impl { // sizeof=8\n"
+                             "                  int x;\n"
+                             "                  int y;\n"
+                             "               }; // typedef (anonymous namespace)::Impl MyImpl;"
+                           , maps.typedefMap.begin()->second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code1);
+                Assert::AreEqual(0, violations, "wrong number of violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "these are overloads, not ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: MyImpl\n"
+                                "[tu3.cpp]\n"
+                                "using MyImpl = struct (anonymous namespace)::Impl { // sizeof=8\n"
+                                "                  int x;\n"
+                                "                  int y;\n"
+                                "               }; // typedef (anonymous namespace)::Impl MyImpl;\n"
+                                "[tu4.cpp]\n"
+                                "using MyImpl = struct (anonymous namespace)::Impl { // sizeof=12\n"
+                                "                  int x;\n"
+                                "                  int y;\n"
+                                "                  int z;\n"
+                                "               }; // typedef (anonymous namespace)::Impl MyImpl;\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
+    {"Used as the underlying type for a using alias template", []
+        {
+            std::string code1 = "namespace { struct Impl { int x; int y;        }; } template <typename T> using MyAlias = Impl; extern void consume(MyAlias<int>*); void consume(MyAlias<int>* p) { (void)p; }";
+            std::string code2 = "namespace { struct Impl { int x; int y; int z; }; } template <typename T> using MyAlias = Impl; extern void consume(MyAlias<int>*);";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(0, maps.udtMap.size());
+            Assert::AreEqual(0, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(1, maps.typedefMap.size());
+            Assert::AreEqual(1, maps.functionMap.size());
+
+            Assert::AreEqual("void __cdecl consume(struct (anonymous namespace)::Impl { // sizeof=8\n"
+                             "                        int x;\n"
+                             "                        int y;\n"
+                             "                     } * p) { (void)p; }"
+                           , maps.functionMap.begin()->second[0].fullyQualified, "serialization");
+            Assert::AreEqual("template <T> using MyAlias = struct (anonymous namespace)::Impl { // sizeof=8\n"
+                             "                                int x;\n"
+                             "                                int y;\n"
+                             "                             }; // no typedef equivalent"
+                , maps.typedefMap.begin()->second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code1);
+                Assert::AreEqual(0, violations, "wrong number of violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "these are overloads, not ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: MyAlias\n"
+                                "[tu3.cpp]\n"
+                                "template <T> using MyAlias = struct (anonymous namespace)::Impl { // sizeof=8\n"
+                                "                                int x;\n"
+                                "                                int y;\n"
+                                "                             }; // no typedef equivalent\n"
+                                "[tu4.cpp]\n"
+                                "template <T> using MyAlias = struct (anonymous namespace)::Impl { // sizeof=12\n"
+                                "                                int x;\n"
+                                "                                int y;\n"
+                                "                                int z;\n"
+                                "                             }; // no typedef equivalent\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
+
 };
