@@ -864,5 +864,77 @@ Test AnonymousUdts[] =
             }
         }
     },
+    {"Used as the underlying type for a nested using alias template", []
+        {
+            std::string code1 = "namespace { struct Impl { int x; int y;        }; } struct Outer { template <typename T> using MyAlias = Impl; }; extern void consume(Outer*); void consume(Outer* p) { (void)p; }";
+            std::string code2 = "namespace { struct Impl { int x; int y; int z; }; } struct Outer { template <typename T> using MyAlias = Impl; }; extern void consume(Outer*);";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(1, maps.udtMap.size());
+            Assert::AreEqual(0, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(1, maps.typedefMap.size());
+            Assert::AreEqual(1, maps.functionMap.size());
+
+            Assert::AreEqual("void __cdecl consume(Outer * p) { (void)p; }"
+                           , maps.functionMap.begin()->second[0].fullyQualified, "serialization");
+            Assert::AreEqual("template <T> using Outer::MyAlias = struct (anonymous namespace)::Impl { // sizeof=8\n"
+                             "                                       int x;\n"
+                             "                                       int y;\n"
+                             "                                    }; // no typedef equivalent"
+                           , maps.typedefMap.begin()->second[0].fullyQualified, "serialization");
+            Assert::AreEqual("struct Outer { // sizeof=1\n"
+                            "template <T> using Outer::MyAlias = struct (anonymous namespace)::Impl { // sizeof=8\n"
+                            "                                       int x;\n"
+                            "                                       int y;\n"
+                            "                                    }; // no typedef equivalent\n"
+                            "};"
+                           , maps.udtMap.begin()->second[0].fullyQualified, "serialization");
+
+
+            {
+                const auto& [violations, output] = RunTest(code1, code1);
+                Assert::AreEqual(0, violations, "wrong number of violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(2, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: Outer::MyAlias\n"
+                                "[tu3.cpp]\n"
+                                "template <T> using Outer::MyAlias = struct (anonymous namespace)::Impl { // sizeof=8\n"
+                                "                                       int x;\n"
+                                "                                       int y;\n"
+                                "                                    }; // no typedef equivalent\n"
+                                "[tu4.cpp]\n"
+                                "template <T> using Outer::MyAlias = struct (anonymous namespace)::Impl { // sizeof=12\n"
+                                "                                       int x;\n"
+                                "                                       int y;\n"
+                                "                                       int z;\n"
+                                "                                    }; // no typedef equivalent\n"
+                                "\n"
+                                "ODR VIOLATION: Outer\n"
+                                "[tu3.cpp]\n"
+                                "struct Outer { // sizeof=1\n"
+                                "template <T> using Outer::MyAlias = struct (anonymous namespace)::Impl { // sizeof=8\n"
+                                "                                       int x;\n"
+                                "                                       int y;\n"
+                                "                                    }; // no typedef equivalent\n"
+                                "};\n"
+                                "[tu4.cpp]\n"
+                                "struct Outer { // sizeof=1\n"
+                                "template <T> using Outer::MyAlias = struct (anonymous namespace)::Impl { // sizeof=12\n"
+                                "                                       int x;\n"
+                                "                                       int y;\n"
+                                "                                       int z;\n"
+                                "                                    }; // no typedef equivalent\n"
+                                "};\n", output, "mismatched output");
+            }
+        }
+    },
 
 };

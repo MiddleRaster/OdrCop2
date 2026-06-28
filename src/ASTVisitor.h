@@ -144,41 +144,8 @@ namespace OdrCop2
             if (context->getSourceManager().isInSystemHeader(tatDecl->getLocation()))
                 return true;
 
-            std::string params;
-            for (const NamedDecl* param : *tatDecl->getTemplateParameters())
-            {
-                if (!params.empty())
-                    params += ", ";
-                params += param->getNameAsString();
-            }
-
-            TypeAliasDecl* aliasDecl = tatDecl->getTemplatedDecl();
-            std::string    aliasName = tatDecl->getQualifiedNameAsString();
-
-            std::string fqtd = "template <" + params + "> using " + aliasName + " = ";
-            
-            QualType             underlying = aliasDecl->getUnderlyingType();
-            const RecordType   * recordType = underlying.getCanonicalType()->getAs<RecordType>();
-            const NamespaceDecl* nsDeclCtx  = recordType != nullptr ? dyn_cast<NamespaceDecl>(recordType->getDecl()->getDeclContext()) : nullptr;
-            if (recordType != nullptr && (recordType->getDecl()->isAnonymousStructOrUnion() || (nsDeclCtx != nullptr && nsDeclCtx->isAnonymousNamespace())))
-            {
-                std::string indentation(fqtd.size(), ' ');
-                std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
-                bool first = true;
-                for (std::string line; std::getline(iss, line);)
-                {
-                    if (first) {
-                        first  = false;
-                        fqtd  += line + "\n";
-                    } else
-                        fqtd += indentation + line + "\n";
-                }
-                fqtd = fqtd.substr(0, fqtd.size()-2); // strip last ";\n"
-                fqtd += "; // no typedef equivalent";
-            }
-            else
-                fqtd += underlying.getAsString(printPolicy) + "; // no typedef equivalent";
-            maps.typedefMap[aliasName].push_back({TU, fqtd});
+            std::string     aliasName = tatDecl->getQualifiedNameAsString();
+            maps.typedefMap[aliasName].push_back({TU, ConstructTemplateAliasSignature(tatDecl)});
             return true;
         }
 
@@ -319,6 +286,44 @@ namespace OdrCop2
             }
             else
                 fqtd += resolvedType + "; // typedef " + resolvedType + " " + aliasName + ";";
+
+            return fqtd;
+        }
+        std::string ConstructTemplateAliasSignature(const clang::TypeAliasTemplateDecl* tatDecl)
+        {
+            std::string params;
+            for (const NamedDecl* param : *tatDecl->getTemplateParameters())
+            {
+                if (!params.empty())
+                    params += ", ";
+                params += param->getNameAsString();
+            }
+
+            TypeAliasDecl* aliasDecl = tatDecl->getTemplatedDecl();
+            std::string    aliasName = tatDecl->getQualifiedNameAsString();
+
+            std::string fqtd = "template <" + params + "> using " + aliasName + " = ";
+            
+            QualType             underlying = aliasDecl->getUnderlyingType();
+            const RecordType   * recordType = underlying.getCanonicalType()->getAs<RecordType>();
+            const NamespaceDecl* nsDeclCtx  = recordType != nullptr ? dyn_cast<NamespaceDecl>(recordType->getDecl()->getDeclContext()) : nullptr;
+            if (recordType != nullptr && (recordType->getDecl()->isAnonymousStructOrUnion() || (nsDeclCtx != nullptr && nsDeclCtx->isAnonymousNamespace())))
+            {
+                std::string indentation(fqtd.size(), ' ');
+                std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
+                bool first = true;
+                for (std::string line; std::getline(iss, line);)
+                {
+                    if (first) {
+                        first = false;
+                        fqtd +=               line + "\n";
+                    } else
+                        fqtd += indentation + line + "\n";
+                }
+                fqtd = fqtd.substr(0, fqtd.size()-2); // strip last ";\n"
+                fqtd += "; // no typedef equivalent";
+            } else
+                fqtd += underlying.getAsString(printPolicy) + "; // no typedef equivalent";
 
             return fqtd;
         }
@@ -1547,6 +1552,21 @@ namespace OdrCop2
                         }
                     }
                     out += "   using " + aliasName + " = " + underlying.getAsString(printPolicy) + ";\n";
+                    continue;
+                }
+                if (const auto* tatDecl = dyn_cast<TypeAliasTemplateDecl>(decl))
+                {   // recurse but indent
+                    bool first = true;
+                    std::string indentation(out.size() - (out.rfind('\n') + 1), ' '); // length of last line up to current spot
+                    std::istringstream iss(ConstructTemplateAliasSignature(tatDecl));
+                    for (std::string line; std::getline(iss, line);)
+                    {
+                        if (first) {
+                            first = false;
+                            out +=               line + "\n";
+                        } else
+                            out += indentation + line + "\n";
+                    }
                     continue;
                 }
                     
