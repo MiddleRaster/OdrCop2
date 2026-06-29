@@ -194,9 +194,14 @@ namespace OdrCop2
             }
             else if (record && record->isLambda())
                 out += "auto " + key;
-            else
+            else if (const auto* enumTy = dyn_cast<clang::EnumType>(qt.getTypePtr()); enumTy && enumTy->getDecl()->isInAnonymousNamespace())
+            {
+                out += cvPrefix + ConstructEnumDefinition(enumTy->getDecl());
+                out += ptrSuffix + " " + key;
+            } else
                 out += varDecl->getType().getUnqualifiedType().getAsString(printPolicy) + " " + key;
 
+            if (varDecl->isInline() || varDecl->isConstexpr()) // inlines/constexpres get initiallizers; for everything else initializers are not ODR-relevant
             if (varDecl->getInit())
             {
                 SourceLocation nameLoc = varDecl->getLocation();
