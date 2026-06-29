@@ -692,7 +692,13 @@ namespace OdrCop2
                         fqn += ">" + ics.ConstructPointersAndReferences();
                     } else
                         fqn += param->getType().getAsString(printPolicy);
-                } else
+                }
+                else if (const auto* enumTy = dyn_cast<clang::EnumType>(ics.GetBaseType().getTypePtr()); enumTy && enumTy->getDecl()->isInAnonymousNamespace())
+                {
+                    fqn += ics.ConstructPrefix() + ConstructEnumDefinition(enumTy->getDecl());
+                    fqn += ics.ConstructPointersAndReferences();
+                }
+                else
                     fqn += param->getType().getAsString(printPolicy);
 
                 // if there is no parameter name, skip this
