@@ -415,7 +415,7 @@ namespace OdrCop2
             return out;
         }
 
-        class PointersAndReferences
+        class IndirectionCvStripper
         {
             enum class IndirKind { Ptr, LRef, RRef };
             struct IndirLayer
@@ -424,39 +424,47 @@ namespace OdrCop2
                 bool      isConst;    // const on this declarator layer (e.g. T* const)
                 bool      isVolatile; // volatile on this declarator layer (rarely seen but correct)
             };
-            std::vector<IndirLayer> layers; // outermost last, so we append in reverse
-            bool baseConst;
-            bool baseVolatile;
-        public:
-            PointersAndReferences(QualType& qualType) // N.B.:  qualType WILL be modified and this is what I want:  it will describe the actual type w/o pointers/references
+            const std::vector<IndirLayer> layers; // outermost last, so we append in reverse
+            const bool baseConst;
+            const bool baseVolatile;
+            const QualType baseType;
+
+            static std::tuple<std::vector<IndirLayer>, QualType, bool, bool> Peel(QualType qualType)
             {
+                std::vector<IndirLayer> layers;
                 while (true)
                 {
                     if (const auto* pt = qualType->getAs<PointerType>())
-                    {   // const/volatile sit on the QualType wrapping the PointerType
-                        layers.push_back({ IndirKind::Ptr,
-                                          qualType.isConstQualified(),
-                                          qualType.isVolatileQualified() });
+                    {
+                        layers.push_back({IndirKind::Ptr, qualType.isConstQualified(), qualType.isVolatileQualified()});
                         qualType = pt->getPointeeType().getCanonicalType();
                     }
                     else if (const auto* rt = qualType->getAs<LValueReferenceType>())
-                    {   // references can't be const-qualified, but be uniform
-                        layers.push_back({ IndirKind::LRef, false, false });
+                    {
+                        layers.push_back({IndirKind::LRef, false, false});
                         qualType = rt->getPointeeType().getCanonicalType();
                     }
                     else if (const auto* rt = qualType->getAs<RValueReferenceType>())
                     {
-                        layers.push_back({ IndirKind::RRef, false, false });
+                        layers.push_back({IndirKind::RRef, false, false});
                         qualType = rt->getPointeeType().getCanonicalType();
                     }
                     else
                         break;
                 }
-
-                // qualType is now the base type; it may itself be const (e.g. const T* -> base is const T)
-                baseConst    = qualType.isConstQualified();
-                baseVolatile = qualType.isVolatileQualified();
+                return {std::move(layers), qualType, qualType.isConstQualified(), qualType.isVolatileQualified()};
             }
+            explicit IndirectionCvStripper(std::tuple<std::vector<IndirLayer>, QualType, bool, bool> t)
+                : layers      (std::move(std::get<0>(t)))
+                , baseType    (std::get<1>(t))
+                , baseConst   (std::get<2>(t))
+                , baseVolatile(std::get<3>(t))
+            {}
+
+        public:
+            explicit IndirectionCvStripper(QualType qualType) : IndirectionCvStripper(Peel(qualType)) {}
+
+            QualType GetBaseType() const { return baseType; }
 
             std::string ConstructPrefix() const
             {
@@ -553,16 +561,16 @@ namespace OdrCop2
                 fqn += "auto"; // in case of returning a lambda
             else
             {
-                QualType      qualType = funcDecl->getReturnType().getCanonicalType();
-                PointersAndReferences par(qualType);  // qualType is now the base type
-                const auto* recordType = dyn_cast<clang::RecordType>(qualType.getTypePtr());
+                IndirectionCvStripper ics(funcDecl->getReturnType().getCanonicalType());
+                const QualType qualType = ics.GetBaseType();
+                const auto * recordType = dyn_cast<clang::RecordType>(qualType.getTypePtr());
                 if (recordType && recordType->getDecl()->isInAnonymousNamespace())
                 {
                     fqn += IndentBlock(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())),
-                                                                fqn.size() + par.ConstructPrefix().size(),
-                                                                par.ConstructPrefix());
+                                                                fqn.size() + ics.ConstructPrefix().size(),
+                                                                ics.ConstructPrefix());
                     fqn  = fqn.substr(0, fqn.size()-2); // remove "; "
-                    fqn += par.ConstructPointersAndReferences();
+                    fqn += ics.ConstructPointersAndReferences();
                 }
                 else
                     fqn += qualType.getAsString(printPolicy);
@@ -654,17 +662,15 @@ namespace OdrCop2
 
             for (const ParmVarDecl* param : funcDecl->parameters())
             {
-                QualType qualType       = param->getType().getCanonicalType();
-                PointersAndReferences par(qualType); // modifies qualType
-                const clang::Type* type = qualType.getTypePtr();
-                const auto*  recordType = dyn_cast<clang::RecordType>(type);
+                IndirectionCvStripper ics(param->getType().getCanonicalType());
+                const auto*  recordType = dyn_cast<clang::RecordType>(ics.GetBaseType().getTypePtr());
                 if (recordType && recordType->getDecl()->isInAnonymousNamespace())
                 {
                     fqn += IndentBlock(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())),
-                                                                fqn.size() - (fqn.rfind('\n') + 1) + par.ConstructPrefix().size(),
-                                                                par.ConstructPrefix());
+                                                                fqn.size() - (fqn.rfind('\n') + 1) + ics.ConstructPrefix().size(),
+                                                                ics.ConstructPrefix());
                     fqn  = fqn.substr(0, fqn.size()-2); // strip off last ";\n"
-                    fqn += par.ConstructPointersAndReferences();
+                    fqn += ics.ConstructPointersAndReferences();
                 }
                 else if (recordType && dyn_cast<ClassTemplateSpecializationDecl>(recordType->getDecl()))
                 {
@@ -680,10 +686,10 @@ namespace OdrCop2
                         }
                     if (hasAnonArg)
                     {
-                        fqn += par.ConstructPrefix() + spec->getQualifiedNameAsString();
+                        fqn += ics.ConstructPrefix() + spec->getQualifiedNameAsString();
                         fqn += IndentBlock(TemplateArgsToString(spec->getTemplateArgs(), false), fqn.size());
                         fqn  = fqn.substr(0, fqn.size() - 2); // strip last ";\n"
-                        fqn += ">" + par.ConstructPointersAndReferences();
+                        fqn += ">" + ics.ConstructPointersAndReferences();
                     } else
                         fqn += param->getType().getAsString(printPolicy);
                 } else
@@ -1213,30 +1219,16 @@ namespace OdrCop2
                     out += ConstructAttributes(decl);
 
                     { // when a field is defined in an anonymous namespace, include the full definition here with the field.
-                        QualType qualType       = field->getType().getCanonicalType();
-                        PointersAndReferences par(qualType);
-
+                        IndirectionCvStripper ics(field->getType().getCanonicalType());
+                        const QualType qualType = ics.GetBaseType();
                         const clang::Type* type = qualType.getTypePtr();
                         const auto* recordType  = clang::dyn_cast<clang::RecordType>(type);
                         if (recordType && recordType->getDecl()->isInAnonymousNamespace())
                         {
-                            out += par.ConstructPrefix();
-                            out += ConstructAttributes(field);
-
-                            std::istringstream iss(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())));
-                            bool first=true;
-                            for (std::string line; std::getline(iss, line);)
-                            {
-                                if (first) {
-                                    first = false;
-                                    out +=         line + "\n";
-                                }
-                                else
-                                    out += "   " + line + "\n";
-                            }
+                            out += ics.ConstructPrefix() + ConstructAttributes(field);
+                            out += IndentBlock(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())), 3);
                             out  = out.substr(0, out.size()-2);
-                            out += par.ConstructPointersAndReferences();
-                            out += " " + field->getNameAsString();
+                            out += ics.ConstructPointersAndReferences() + " " + field->getNameAsString();
                         }
                         else if (const auto* enumTy = llvm::dyn_cast<clang::EnumType>(type); enumTy && !enumTy->getDecl()->getIdentifier())
                         {
@@ -1305,17 +1297,12 @@ namespace OdrCop2
                     if (method->isImplicit())
                         continue;
 
-                    // recurse but indent
-                    std::istringstream iss(ConstructFunctionSignature(method, false));
-                    for (std::string line; std::getline(iss, line); )
-                        out += "   " + line + "\n";
+                    out += IndentBlock(ConstructFunctionSignature(method, false), 3, "   ");
                     continue;
                 }
                 if (const auto* funcTemplateDecl = dyn_cast<FunctionTemplateDecl>(decl))
-                {   // recurse but indent
-                    std::istringstream iss(ConstructFunctionSignature(funcTemplateDecl->getTemplatedDecl(), false));
-                    for (std::string line; std::getline(iss, line); )
-                        out += "   " + line + "\n";
+                {
+                    out += IndentBlock(ConstructFunctionSignature(funcTemplateDecl->getTemplatedDecl(), false), 3, "   ");
                     continue;
                 }
 
@@ -1327,10 +1314,7 @@ namespace OdrCop2
                     if (nested->isLambda())
                         continue;
 
-                    // recurse but indent
-                    std::istringstream iss(ConstructRecordSignature(nested));
-                    for (std::string line; std::getline(iss, line); )
-                        out += "   " + line + "\n";
+                    out += IndentBlock(ConstructRecordSignature(nested), 3, "   ");
                     continue;
                 }
                 if (clang::isa<clang::IndirectFieldDecl>(decl))
@@ -1354,10 +1338,7 @@ namespace OdrCop2
                         continue;
                     }
 
-                    // recurse but indent
-                    std::istringstream iss(ConstructRecordSignature(templated));
-                    for (std::string line; std::getline(iss, line); )
-                        out += "   " + line + "\n";
+                    out += IndentBlock(ConstructRecordSignature(templated), 3, "   ");
                     continue;
                 }
 
@@ -1366,17 +1347,13 @@ namespace OdrCop2
                     if (auto* namedFriendDecl = friendDecl->getFriendDecl())
                     {
                         if (auto* funcDecl = dyn_cast<FunctionDecl>(namedFriendDecl))
-                        {   // recurse but indent
-                            std::istringstream iss(ConstructFunctionSignature(funcDecl, false));
-                            for (std::string line; std::getline(iss, line); )
-                                out += "   " + line + "\n";
+                        {
+                            out += IndentBlock(ConstructFunctionSignature(funcDecl, false), 3, "   ");
                             continue;
                         }
                         if (auto* funcTemplateDecl = dyn_cast<FunctionTemplateDecl>(namedFriendDecl))
-                        {   // recurse but indent
-                            std::istringstream iss(ConstructFunctionSignature(funcTemplateDecl->getTemplatedDecl(), false));
-                            for (std::string line; std::getline(iss, line); )
-                                out += "   " + line + "\n";
+                        {
+                            out += IndentBlock(ConstructFunctionSignature(funcTemplateDecl->getTemplatedDecl(), false), 3, "   ");
                             continue;
                         }
                         if (auto* classTemplateDecl = dyn_cast<ClassTemplateDecl>(namedFriendDecl))
@@ -1391,10 +1368,7 @@ namespace OdrCop2
                                 continue;
                             }
 
-                            // recurse but indent
-                            std::istringstream iss(ConstructRecordSignature(templated));
-                            for (std::string line; std::getline(iss, line); )
-                                out += "   " + line + "\n";
+                            out += IndentBlock(ConstructRecordSignature(templated), 3, "   ");
                             continue;
                         }
                     }
