@@ -1163,4 +1163,34 @@ Test AnonymousEnums[] =
             }
         }
     },
+
+    {"Anonymous namespace enum used as a template type arg", []
+        {
+            std::string code1 = "namespace { enum Color { Red, Green, Blue };        } template<typename T> struct Box { T value; }; extern void consume(Box<Color>*); void consume(Box<Color>* p) { (void)p; }";
+            std::string code2 = "namespace { enum Color { Red, Green, Blue, Alpha }; } template<typename T> struct Box { T value; }; extern void consume(Box<Color>*);";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(1, maps.udtMap.size());
+            Assert::AreEqual(0, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(0, maps.typedefMap.size());
+            Assert::AreEqual(1, maps.functionMap.size());
+
+            Assert::AreEqual("template<typename T> struct Box {\n"
+                             "   T value;\n"
+                             "};"
+                            , maps.udtMap.begin()->second[0].fullyQualified, "serialization");
+            Assert::AreEqual("void __cdecl consume(Box<enum (anonymous namespace)::Color> * p) { (void)p; }"
+                            , maps.functionMap.begin()->second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(0, violations, "wrong number of ODR violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+        }
+    },
 };

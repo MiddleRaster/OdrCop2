@@ -680,23 +680,14 @@ namespace OdrCop2
                 else if (recordType && dyn_cast<ClassTemplateSpecializationDecl>(recordType->getDecl()))
                 {
                     const auto* spec = dyn_cast<ClassTemplateSpecializationDecl>(recordType->getDecl());
-
-                    // Check if any type arg is from an anonymous namespace
-                    bool hasAnonArg = false;
                     for (const auto& arg : spec->getTemplateArgs().asArray())
-                        if (arg.getKind() == TemplateArgument::Type)
-                        if (const auto* rd = arg.getAsType()->getAsCXXRecordDecl())
-                        if (rd->isInAnonymousNamespace()) { 
-                            hasAnonArg = true; break;
-                        }
-                    if (hasAnonArg)
                     {
                         fqn += ics.ConstructPrefix() + spec->getQualifiedNameAsString();
                         fqn += IndentBlock(TemplateArgsToString(spec->getTemplateArgs(), false), fqn.size());
                         fqn  = fqn.substr(0, fqn.size() - 2); // strip last ";\n"
                         fqn += ">" + ics.ConstructPointersAndReferences();
-                    } else
-                        fqn += param->getType().getAsString(printPolicy);
+                    }
+                    // else if no anonymous type(s), fqn += param->getType().getAsString(printPolicy); // No longer checking if any type arg is from an anonymous namespace
                 }
                 else if (const auto* enumTy = dyn_cast<clang::EnumType>(ics.GetBaseType().getTypePtr()); enumTy && enumTy->getDecl()->isInAnonymousNamespace())
                 {
