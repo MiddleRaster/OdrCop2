@@ -1231,7 +1231,11 @@ namespace OdrCop2
                             out += ics.ConstructPointersAndReferences() + " " + field->getNameAsString();
                         }
                         else if (const auto* enumTy = llvm::dyn_cast<clang::EnumType>(type); enumTy && !enumTy->getDecl()->getIdentifier())
-                        {
+                        { // nameless enum
+                            out += ConstructEnumDefinition(enumTy->getDecl()) + " " + field->getNameAsString();
+                        }
+                        else if (const auto* enumTy = llvm::dyn_cast<clang::EnumType>(type); enumTy && enumTy->getDecl()->isInAnonymousNamespace())
+                        { // enum defined in anonymous namespace
                             out += ConstructEnumDefinition(enumTy->getDecl()) + " " + field->getNameAsString();
                         }
                         else
