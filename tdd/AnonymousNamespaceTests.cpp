@@ -1132,4 +1132,35 @@ Test AnonymousEnums[] =
             }
         }
     },
+    {"Anonymous namespace enum used as an inline global variable pointer", []
+        {
+            std::string code1 = "namespace { enum Color { Red, Green, Blue }; } Color c = Red;  inline const Color* globalColor = &c;";
+            std::string code2 = "namespace { enum Color { Red, Green, Blue }; } Color c = Blue; inline const Color* globalColor = &c;";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(0, maps.udtMap.size());
+            Assert::AreEqual(2, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(0, maps.typedefMap.size());
+            Assert::AreEqual(0, maps.functionMap.size());
+
+
+            {
+                auto it = maps.varMap.begin();
+                Assert::AreEqual("enum (anonymous namespace)::Color { Red=0, Green=1, Blue=2 } c;"
+                               , (*it++).second[0].fullyQualified, "serialization");
+                Assert::AreEqual("inline const enum (anonymous namespace)::Color { Red=0, Green=1, Blue=2 } * globalColor = &c;"
+                               , (*it++).second[0].fullyQualified, "serialization");
+            }
+
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(0, violations, "wrong number of ODR violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+        }
+    },
 };
