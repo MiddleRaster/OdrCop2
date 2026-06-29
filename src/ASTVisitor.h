@@ -347,7 +347,21 @@ namespace OdrCop2
                 const clang::TemplateArgument& arg = args[i];
                 switch (arg.getKind())
                 {
-                case clang::TemplateArgument::Integral:          out += llvm::toString(arg.getAsIntegral(), 10);                                                      break;
+                case clang::TemplateArgument::Integral:
+                { // if it's actually an enum value, try to display the enum
+                    const auto* enumTy = arg.getIntegralType()->getAs<clang::EnumType>();
+                    if (enumTy) {
+                        llvm::APSInt val = arg.getAsIntegral();
+                        for (const auto* ecd : enumTy->getDecl()->enumerators()) {
+                            if (ecd->getInitVal() == val) {
+                                out += ConstructEnumDefinition(enumTy->getDecl()) + "::" + ecd->getNameAsString();
+                                break;
+                            }
+                        }
+                    } else
+                        out += llvm::toString(arg.getAsIntegral(), 10);
+                    break;
+                }
                 case clang::TemplateArgument::NullPtr:           out += "nullptr";                                                                                    break;
                 case clang::TemplateArgument::Declaration:       out += arg.getAsDecl()->getQualifiedNameAsString();                                                  break;
                 case clang::TemplateArgument::Null:              out += "null";                                                                                       break;
@@ -1432,9 +1446,10 @@ namespace OdrCop2
             bool first = true;
             for (const clang::NamedDecl* param : *params)
             {
-                if (!first)
+                if (first)
+                    first = false;
+                else
                     out += ", ";
-                first = false;
 
                 if (const auto* ttp = clang::dyn_cast<clang::TemplateTypeParmDecl>(param))
                 {
@@ -1451,7 +1466,11 @@ namespace OdrCop2
                 }
                 else if (const auto* nttp = clang::dyn_cast<clang::NonTypeTemplateParmDecl>(param))
                 {
-                    out += nttp->getType().getAsString(printPolicy);
+                    const auto* enumTy = dyn_cast<clang::EnumType>(nttp->getType().getTypePtr());
+                    if (enumTy && enumTy->getDecl()->isInAnonymousNamespace())
+                        out += ConstructEnumDefinition(enumTy->getDecl());
+                    else
+                        out += nttp->getType().getAsString(printPolicy);
                     if (!nttp->getName().empty())
                         out += " " + nttp->getName().str();
 

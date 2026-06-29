@@ -1193,4 +1193,39 @@ Test AnonymousEnums[] =
             }
         }
     },
+    {"Anonymous namespace enum used as a not-type template argument", []
+        {
+            std::string code1 = "namespace { enum Color { Red, Green, Blue,       }; } template<Color C> struct Box { }; extern void consume(Box<Red>*); void consume(Box<Red>* p) { (void)p; }";
+            std::string code2 = "namespace { enum Color { Red, Green, Blue, Alpha }; } template<Color C> struct Box { }; extern void consume(Box<Red>*);";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(1, maps.udtMap.size());
+            Assert::AreEqual(0, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(0, maps.typedefMap.size());
+            Assert::AreEqual(1, maps.functionMap.size());
+
+            Assert::AreEqual("template<enum (anonymous namespace)::Color { Red=0, Green=1, Blue=2 } C> struct Box {\n"
+                             "};"
+                            , maps.udtMap.begin()->second[0].fullyQualified, "serialization");
+            Assert::AreEqual("void __cdecl consume(Box<enum (anonymous namespace)::Color { Red=0, Green=1, Blue=2 }::Red> * p) { (void)p; }"
+                            , maps.functionMap.begin()->second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: Box<>\n"
+                                "[tu3.cpp]\n"
+                                "template<enum (anonymous namespace)::Color { Red=0, Green=1, Blue=2 } C> struct Box {\n"
+                                "};\n"
+                                "[tu4.cpp]\n"
+                                "template<enum (anonymous namespace)::Color { Red=0, Green=1, Blue=2, Alpha=3 } C> struct Box {\n"
+                                "};\n", output, "mismatched output");
+            }
+        }
+    },
 };
