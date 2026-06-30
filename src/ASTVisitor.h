@@ -251,23 +251,58 @@ namespace OdrCop2
     private:
         std::string ConstructTypedefSignature(const clang::TypedefNameDecl* typedefDecl)
         {
-            QualType underlying          = typedefDecl->getUnderlyingType().getCanonicalType();
-            const RecordType* recordType = underlying->getAs<RecordType>();
-
+            QualType    underlying   = typedefDecl->getUnderlyingType().getCanonicalType();
             std::string aliasName    = typedefDecl->getQualifiedNameAsString();
             std::string fqtd         = "using " + aliasName + " = ";
             std::string resolvedType = underlying.getAsString(printPolicy);
 
-            if (recordType != nullptr &&
-                (recordType->getDecl()->isAnonymousStructOrUnion() || (dyn_cast<NamespaceDecl>(recordType->getDecl()->getDeclContext()) != nullptr &&
-                                                                       dyn_cast<NamespaceDecl>(recordType->getDecl()->getDeclContext())->isAnonymousNamespace())))
-            {
-                fqtd += IndentBlock(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())), fqtd.size());
-                fqtd  = fqtd.substr(0, fqtd.size()-2); // strip last ";\n"
-                fqtd += "; // typedef " + resolvedType + " " + aliasName + ";";
-            } else
-                fqtd += resolvedType + "; // typedef " + resolvedType + " " + aliasName + ";";
+            // nameless or anonymous UDTs
+            bool needsFullInlining = false;
+            const RecordType* recordType = underlying->getAs<RecordType>();
+            if (recordType != nullptr) {
+                if (recordType->getDecl()->getName().empty())
+                    needsFullInlining = true;
+                else {
+                    const NamespaceDecl* nsDecl = dyn_cast<NamespaceDecl>(recordType->getDecl()->getDeclContext());
+                    if (nsDecl != nullptr)
+                        if (nsDecl->isAnonymousNamespace())
+                            needsFullInlining = true;
+                }
+                if (needsFullInlining)
+                {
+                    fqtd += IndentBlock(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())), fqtd.size());
+                    fqtd  = fqtd.substr(0, fqtd.size()-2); // strip last ";\n"
+                    fqtd += "; // typedef " + resolvedType + " " + aliasName + ";";
+                    return fqtd;
+                }
+            }
 
+            // nameless or anonymous enums
+            bool isNameless           = false;
+            bool isAnonymousNamespace = false;
+            const EnumType * enumType = underlying->getAs<EnumType>();
+            if (enumType != nullptr)
+            {
+                if (enumType->getDecl()->getName().empty())
+                    isNameless = true;
+                const NamespaceDecl* nsDecl = dyn_cast<NamespaceDecl>(enumType->getDecl()->getDeclContext());
+                if (nsDecl != nullptr)
+                    if (nsDecl->isAnonymousNamespace())
+                        isAnonymousNamespace = true;
+            }
+            if (isNameless || isAnonymousNamespace)
+            {   // if nameless, enumSig will look like this:  "enum (unnamed enum : Red) { Red = 0, Green = 1, Blue = 2 };"
+                std::string enumSig = ConstructEnumDefinition(enumType->getDecl());
+                if (isAnonymousNamespace && isNameless)
+                {   // if both, need to insert "(anonymous namespace)::" between the "enum " and "(unnamed enum"
+                    enumSig = enumSig.substr(5); // strip off "enum "
+                    enumSig = "enum (anonymous namespace)::" + enumSig;
+                }
+                fqtd += enumSig + "; // typedef " + enumSig + " " + aliasName + ";";
+                return fqtd;
+            }
+            
+            fqtd += resolvedType + "; // typedef " + resolvedType + " " + aliasName + ";";
             return fqtd;
         }
         std::string ConstructTemplateAliasSignature(const clang::TypeAliasTemplateDecl* tatDecl)

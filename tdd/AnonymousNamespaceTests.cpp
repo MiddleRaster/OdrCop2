@@ -570,16 +570,7 @@ Test AnonymousUdts[] =
                              "   T value;\n"
                              "};"
                            , (*it++).second[0].fullyQualified, "serialization");
-            //Assert::AreEqual("template<> struct Box<struct (anonymous namespace)::Config { // sizeof=8\n" // see N.B. comment, above
-            //                 "                         int width;\n"
-            //                 "                         int height;\n"
-            //                 "                      }> { // sizeof=8\n"
-            //                 "   struct (anonymous namespace)::Config { // sizeof=8\n"
-            //                 "      int width;\n"
-            //                 "      int height;\n"
-            //                 "   } value;\n"
-            //                 "};"
-            //               , (*it++).second[0].fullyQualified, "serialization");
+
             Assert::AreEqual(1,  maps.functionMap.size());
             Assert::AreEqual("void __cdecl Process(const Box<struct (anonymous namespace)::Config { // sizeof=8\n"
                              "                                  int width;\n"
@@ -936,6 +927,47 @@ Test AnonymousUdts[] =
             }
         }
     },
+    {"Nameless and anonymous struct, used as the underlying type for a typedef", []
+        {
+            std::string code1 = "namespace { struct { int x; int y;       } AnonInstance; } typedef decltype(AnonInstance) PointAlias;";
+            std::string code2 = "namespace { struct { int x; int y; int z;} AnonInstance; } typedef decltype(AnonInstance) PointAlias;";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(0, maps.udtMap.size());
+            Assert::AreEqual(0, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(1, maps.typedefMap.size());
+            Assert::AreEqual(0, maps.functionMap.size());
+
+            Assert::AreEqual("using PointAlias = struct (anonymous namespace)::(unnamed struct at tu1.cpp:1:13) { // sizeof=8\n"
+                             "                      int x;\n"
+                             "                      int y;\n"
+                             "                   }; // typedef (anonymous namespace)::(unnamed struct at tu1.cpp:1:13) PointAlias;"
+                , maps.typedefMap.begin()->second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: PointAlias\n"
+                                "[tu3.cpp]\n"
+                                "using PointAlias = struct (anonymous namespace)::(unnamed struct at tu3.cpp:1:13) { // sizeof=8\n"
+                                "                      int x;\n"
+                                "                      int y;\n"
+                                "                   }; // typedef (anonymous namespace)::(unnamed struct at tu3.cpp:1:13) PointAlias;\n"
+                                "[tu4.cpp]\n"
+                                "using PointAlias = struct (anonymous namespace)::(unnamed struct at tu4.cpp:1:13) { // sizeof=12\n"
+                                "                      int x;\n"
+                                "                      int y;\n"
+                                "                      int z;\n"
+                                "                   }; // typedef (anonymous namespace)::(unnamed struct at tu4.cpp:1:13) PointAlias;\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
 };
 
 Test AnonymousEnums[] =
@@ -1193,7 +1225,7 @@ Test AnonymousEnums[] =
             }
         }
     },
-    {"Anonymous namespace enum used as a not-type template argument", []
+    {"Anonymous namespace enum used as a non-type template argument", []
         {
             std::string code1 = "namespace { enum Color { Red, Green, Blue,       }; } template<Color C> struct Box { }; extern void consume(Box<Red>*); void consume(Box<Red>* p) { (void)p; }";
             std::string code2 = "namespace { enum Color { Red, Green, Blue, Alpha }; } template<Color C> struct Box { }; extern void consume(Box<Red>*);";
@@ -1228,4 +1260,105 @@ Test AnonymousEnums[] =
             }
         }
     },
+
+    {"Anonymous namespace enum used as a typedef or using alias", []
+        {
+            std::string code1 = "namespace { enum Color { Red, Green, Blue,       }; } typedef Color ColorAlias;";
+            std::string code2 = "namespace { enum Color { Red, Green, Blue, Alpha }; } using ColorAlias = Color;";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(0, maps.udtMap.size());
+            Assert::AreEqual(0, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(1, maps.typedefMap.size());
+            Assert::AreEqual(0, maps.functionMap.size());
+
+            Assert::AreEqual("using ColorAlias = enum (anonymous namespace)::Color { Red=0, Green=1, Blue=2 }; // typedef enum (anonymous namespace)::Color { Red=0, Green=1, Blue=2 } ColorAlias;"
+                            , maps.typedefMap.begin()->second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: ColorAlias\n"
+                                "[tu3.cpp]\n"
+                                "using ColorAlias = enum (anonymous namespace)::Color { Red=0, Green=1, Blue=2 }; // typedef enum (anonymous namespace)::Color { Red=0, Green=1, Blue=2 } ColorAlias;\n"
+                                "[tu4.cpp]\n"
+                                "using ColorAlias = enum (anonymous namespace)::Color { Red=0, Green=1, Blue=2, Alpha=3 }; // typedef enum (anonymous namespace)::Color { Red=0, Green=1, Blue=2, Alpha=3 } ColorAlias;\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
+    {"Nameless enum used as a typedef or using alias", []
+        {
+            std::string code1 =            "typedef enum { Red, Green, Blue,       } ColorAlias;";
+            std::string code2 = "using ColorAlias = enum { Red, Green, Blue, Alpha };";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(0, maps.udtMap.size());
+            Assert::AreEqual(0, maps.varMap.size());
+            Assert::AreEqual(1, maps.enumMap.size());
+            Assert::AreEqual(1, maps.typedefMap.size());
+            Assert::AreEqual(0, maps.functionMap.size());
+
+            Assert::AreEqual("using ColorAlias = enum (unnamed enum: Red) { Red=0, Green=1, Blue=2 }; // typedef enum (unnamed enum: Red) { Red=0, Green=1, Blue=2 } ColorAlias;"
+                            , maps.typedefMap.begin()->second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(2, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: (unnamed enum: Red)\n"
+                                "[tu3.cpp]\n"
+                                "enum (unnamed enum: Red) { Red=0, Green=1, Blue=2 };\n"
+                                "[tu4.cpp]\n"
+                                "enum (unnamed enum: Red) { Red=0, Green=1, Blue=2, Alpha=3 };\n"
+                                "\n"
+                                "ODR VIOLATION: ColorAlias\n"
+                                "[tu3.cpp]\n"
+                                "using ColorAlias = enum (unnamed enum: Red) { Red=0, Green=1, Blue=2 }; // typedef enum (unnamed enum: Red) { Red=0, Green=1, Blue=2 } ColorAlias;\n"
+                                "[tu4.cpp]\n"
+                                "using ColorAlias = enum (unnamed enum: Red) { Red=0, Green=1, Blue=2, Alpha=3 }; // typedef enum (unnamed enum: Red) { Red=0, Green=1, Blue=2, Alpha=3 } ColorAlias;\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
+    {"Nameless enum in an anonymous namespace used as a typedef or using alias", []
+        {
+            std::string code1 = "namespace { enum { Red, Green, Blue,       }; } typedef decltype(Red) ColorAlias;";
+            std::string code2 = "namespace { enum { Red, Green, Blue, Alpha }; } using ColorAlias = decltype(Red);";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(0, maps.udtMap.size());
+            Assert::AreEqual(0, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(1, maps.typedefMap.size());
+            Assert::AreEqual(0, maps.functionMap.size());
+
+            Assert::AreEqual("using ColorAlias = enum (anonymous namespace)::(unnamed enum: Red) { Red=0, Green=1, Blue=2 }; // typedef enum (anonymous namespace)::(unnamed enum: Red) { Red=0, Green=1, Blue=2 } ColorAlias;"
+                            , maps.typedefMap.begin()->second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: ColorAlias\n"
+                                "[tu3.cpp]\n"
+                                "using ColorAlias = enum (anonymous namespace)::(unnamed enum: Red) { Red=0, Green=1, Blue=2 }; // typedef enum (anonymous namespace)::(unnamed enum: Red) { Red=0, Green=1, Blue=2 } ColorAlias;\n"
+                                "[tu4.cpp]\n"
+                                "using ColorAlias = enum (anonymous namespace)::(unnamed enum: Red) { Red=0, Green=1, Blue=2, Alpha=3 }; // typedef enum (anonymous namespace)::(unnamed enum: Red) { Red=0, Green=1, Blue=2, Alpha=3 } ColorAlias;\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
+
 };
