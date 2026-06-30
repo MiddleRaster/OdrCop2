@@ -275,6 +275,60 @@ namespace OdrCop2
                     fqtd += "; // typedef " + resolvedType + " " + aliasName + ";";
                     return fqtd;
                 }
+
+                // anonymous-namespace function (or other ValueDecl) used as a non-type template argument
+                const ClassTemplateSpecializationDecl* specDecl = dyn_cast<ClassTemplateSpecializationDecl>(recordType->getDecl());
+                if (specDecl != nullptr)
+                {
+                    std::string argList;
+
+                    bool anyInlined = false;
+                    const TemplateArgumentList& args = specDecl->getTemplateArgs();
+                    for (unsigned i=0; i<args.size(); ++i)
+                    {
+                        const TemplateArgument& arg = args.get(i);
+                        bool isAnonNsFunc = false;
+                        if (i != 0)
+                            argList += ", ";
+
+                        const FunctionDecl* funcDecl = nullptr;
+                        if (arg.getKind() == TemplateArgument::Declaration)
+                            funcDecl = dyn_cast<FunctionDecl>(arg.getAsDecl());
+                        if (funcDecl != nullptr) {
+                            const NamespaceDecl* nsDecl = dyn_cast<NamespaceDecl>(funcDecl->getDeclContext());
+                            if (nsDecl != nullptr && nsDecl->isAnonymousNamespace())
+                                isAnonNsFunc = true;
+                        }
+
+                        if (isAnonNsFunc) {
+                            argList += "&(";
+                            argList += IndentBlock(ConstructFunctionSignature(funcDecl), 
+                                                   fqtd.size() + argList.size() + specDecl->getSpecializedTemplate()->getNameAsString().size()+1); // +1 for "<"
+                            argList  = argList.substr(0, argList.size()-1); // remove "\n"
+                            argList += ")";
+                            anyInlined = true;
+                        } else {
+                            llvm::raw_string_ostream stream(argList);
+                            arg.print(printPolicy, stream, /*IncludeType=*/false);
+                        }
+                    }
+
+                    if (anyInlined)
+                    {   // fqtd already contains: "using Blah = "
+                        fqtd += specDecl->getSpecializedTemplate()->getNameAsString() + "<";
+                        size_t col1 = fqtd.size() - (fqtd.rfind('\n')+1);// get length of last line of fqtd
+
+                        std::string whatWillBeReused = argList + ">";
+
+                        fqtd += whatWillBeReused + "; // typedef " + specDecl->getSpecializedTemplate()->getNameAsString() + "<";
+                        size_t col2 = fqtd.size() - (fqtd.rfind('\n')+1); // get length of last line of fqtd
+
+                        fqtd += IndentBlock(whatWillBeReused, col2-col1);
+                        fqtd  = fqtd.substr(0, fqtd.size()-1); // remove "\n"
+                        fqtd += " " + aliasName + ";";
+                        return fqtd;
+                    }
+                }
             }
 
             // nameless or anonymous enums
@@ -1502,12 +1556,16 @@ namespace OdrCop2
                 else if (const auto* nttp = clang::dyn_cast<clang::NonTypeTemplateParmDecl>(param))
                 {
                     const auto* enumTy = dyn_cast<clang::EnumType>(nttp->getType().getTypePtr());
-                    if (enumTy && enumTy->getDecl()->isInAnonymousNamespace())
+                    if (enumTy && enumTy->getDecl()->isInAnonymousNamespace()) {
                         out += ConstructEnumDefinition(enumTy->getDecl());
-                    else
-                        out += nttp->getType().getAsString(printPolicy);
-                    if (!nttp->getName().empty())
-                        out += " " + nttp->getName().str();
+                        if (!nttp->getName().empty())
+                            out += " " + nttp->getName().str();
+                    } else {
+                        std::string declStr;
+                        llvm::raw_string_ostream declStream(declStr);
+                        nttp->getType().print(declStream, printPolicy, nttp->getName());
+                        out += declStr;
+                    }
 
                     if (nttp->hasDefaultArgument())
                     {

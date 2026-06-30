@@ -1362,3 +1362,94 @@ Test AnonymousEnums[] =
     },
 
 };
+
+Test AnonymousFunctions[] =
+{
+    {"Function in an anonymous namespace used as a non-type template parameter", []
+        {
+            std::string code1 = "namespace { int Func(int x) { return x + 1; } } template<int(*F)(int)> struct Wrapper {}; typedef Wrapper<Func> WrapperAlias;";
+            std::string code2 = "namespace { int Func(int x) { return x + 2; } } template<int(*F)(int)> struct Wrapper {}; typedef Wrapper<Func> WrapperAlias;";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(1, maps.udtMap.size());
+            Assert::AreEqual(0, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(1, maps.typedefMap.size());
+            Assert::AreEqual(0, maps.functionMap.size());
+
+            Assert::AreEqual("template<int (*F)(int)> struct Wrapper {\n"
+                             "};", maps.udtMap.begin()->second[0].fullyQualified, "serialization");
+
+            Assert::AreEqual("using WrapperAlias = Wrapper<&(int __cdecl (anonymous namespace)::Func(int x) { return x + 1; })>; // typedef Wrapper<&(int __cdecl (anonymous namespace)::Func(int x) { return x + 1; })> WrapperAlias;"
+                            , maps.typedefMap.begin()->second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: WrapperAlias\n"
+                                "[tu3.cpp]\n"
+                                "using WrapperAlias = Wrapper<&(int __cdecl (anonymous namespace)::Func(int x) { return x + 1; })>; // typedef Wrapper<&(int __cdecl (anonymous namespace)::Func(int x) { return x + 1; })> WrapperAlias;\n"
+                                "[tu4.cpp]\n"
+                                "using WrapperAlias = Wrapper<&(int __cdecl (anonymous namespace)::Func(int x) { return x + 2; })>; // typedef Wrapper<&(int __cdecl (anonymous namespace)::Func(int x) { return x + 2; })> WrapperAlias;\n"
+                               , output, "mismatched output");
+            }
+        }
+    },
+    {"Two-line Function in an anonymous namespace used as a non-type template parameter to test indenting", []
+        {
+            std::string code1 = "namespace { int Func(int x) { int y = x+1; return y; } } template<int(*F)(int)> struct Wrapper {}; typedef Wrapper<Func> WrapperAlias;";
+            std::string code2 = "namespace { int Func(int x) { int y = x+2; return y; } } template<int(*F)(int)> struct Wrapper {}; typedef Wrapper<Func> WrapperAlias;";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(1, maps.udtMap.size());
+            Assert::AreEqual(0, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(1, maps.typedefMap.size());
+            Assert::AreEqual(0, maps.functionMap.size());
+
+            Assert::AreEqual("template<int (*F)(int)> struct Wrapper {\n"
+                             "};", maps.udtMap.begin()->second[0].fullyQualified, "serialization");
+
+            Assert::AreEqual("using WrapperAlias = Wrapper<&(int __cdecl (anonymous namespace)::Func(int x) {\n"
+                             "                                   int y = x + 1;\n"
+                             "                                   return y;\n"
+                             "                               })>; // typedef Wrapper<&(int __cdecl (anonymous namespace)::Func(int x) {\n"
+                             "                                                             int y = x + 1;\n"
+                             "                                                             return y;\n"
+                             "                                                         })> WrapperAlias;"
+                           , maps.typedefMap.begin()->second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: WrapperAlias\n"
+                                "[tu3.cpp]\n"
+                                "using WrapperAlias = Wrapper<&(int __cdecl (anonymous namespace)::Func(int x) {\n"
+                                "                                   int y = x + 1;\n"
+                                "                                   return y;\n"
+                                "                               })>; // typedef Wrapper<&(int __cdecl (anonymous namespace)::Func(int x) {\n"
+                                "                                                             int y = x + 1;\n"
+                                "                                                             return y;\n"
+                                "                                                         })> WrapperAlias;\n"
+                                "[tu4.cpp]\n"
+                                "using WrapperAlias = Wrapper<&(int __cdecl (anonymous namespace)::Func(int x) {\n"
+                                "                                   int y = x + 2;\n"
+                                "                                   return y;\n"
+                                "                               })>; // typedef Wrapper<&(int __cdecl (anonymous namespace)::Func(int x) {\n"
+                                "                                                             int y = x + 2;\n"
+                                "                                                             return y;\n"
+                                "                                                         })> WrapperAlias;\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
+
+};
