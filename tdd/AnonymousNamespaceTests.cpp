@@ -1451,10 +1451,10 @@ Test AnonymousFunctions[] =
             }
         }
     },
-    {"Two two-line Functions in an anonymous namespace used as a non-type template parameter to test indenting", []
+    {"Three two-line Functions in an anonymous namespace used as a non-type template parameter to test indenting", []
         {
-            std::string code1 = "namespace { int Foo(int x) { int y = x+1; return y; } void Bar() { int x=1; --x; } } template<int(*F)(int), typename T, void(*B)()> struct Wrapper {}; typedef Wrapper<Foo,int,Bar> WrapperAlias;";
-            std::string code2 = "namespace { int Foo(int x) { int y = x+2; return y; } void Bar() { int x=1; --x; } } template<int(*F)(int), typename T, void(*B)()> struct Wrapper {}; typedef Wrapper<Foo,int,Bar> WrapperAlias;";
+            std::string code1 = "namespace { int Foo(int x) { int y = x+1; return y; } void Bar() { int x=1; --x; } void Baz() { int y=1; y--; } } template<int(*F)(int), typename T, void(*B)(), void(*Z)()> struct Wrapper {}; typedef Wrapper<Foo,int,Bar,Baz> WrapperAlias;";
+            std::string code2 = "namespace { int Foo(int x) { int y = x+2; return y; } void Bar() { int x=1; --x; } void Baz() { int y=1; y--; } } template<int(*F)(int), typename T, void(*B)(), void(*Z)()> struct Wrapper {}; typedef Wrapper<Foo,int,Bar,Baz> WrapperAlias;";
 
             OdrCop2::AllMaps maps;
             bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
@@ -1466,7 +1466,7 @@ Test AnonymousFunctions[] =
             Assert::AreEqual(1, maps.typedefMap.size());
             Assert::AreEqual(0, maps.functionMap.size());
 
-            Assert::AreEqual("template<int (*F)(int), typename T, void (*B)()> struct Wrapper {\n"
+            Assert::AreEqual("template<int (*F)(int), typename T, void (*B)(), void (*Z)()> struct Wrapper {\n"
                              "};", maps.udtMap.begin()->second[0].fullyQualified, "serialization");
 
             Assert::AreEqual("using WrapperAlias = Wrapper<&(int __cdecl (anonymous namespace)::Foo(int x) {\n"
@@ -1475,13 +1475,19 @@ Test AnonymousFunctions[] =
                              "                               }), int, &(void __cdecl (anonymous namespace)::Bar() {\n"
                              "                                              int x = 1;\n"
                              "                                              --x;\n"
-                             "                                          })>; // typedef Wrapper<&(int __cdecl (anonymous namespace)::Foo(int x) {\n"
-                             "                                                                        int y = x + 1;\n"
-                             "                                                                        return y;\n"
-                             "                                                                    }), int, &(void __cdecl (anonymous namespace)::Bar() {\n"
-                             "                                                                                   int x = 1;\n"
-                             "                                                                                   --x;\n"
-                             "                                                                               })> WrapperAlias;"
+                             "                                          }), &(void __cdecl (anonymous namespace)::Baz() {\n"
+                             "                                                    int y = 1;\n"
+                             "                                                    y--;\n"
+                             "                                                })>; // typedef Wrapper<&(int __cdecl (anonymous namespace)::Foo(int x) {\n"
+                             "                                                                              int y = x + 1;\n"
+                             "                                                                              return y;\n"
+                             "                                                                          }), int, &(void __cdecl (anonymous namespace)::Bar() {\n"
+                             "                                                                                         int x = 1;\n"
+                             "                                                                                         --x;\n"
+                             "                                                                                     }), &(void __cdecl (anonymous namespace)::Baz() {\n"
+                             "                                                                                               int y = 1;\n"
+                             "                                                                                               y--;\n"
+                             "                                                                                           })> WrapperAlias;"
                            , maps.typedefMap.begin()->second[0].fullyQualified, "serialization");
 
             {
@@ -1496,13 +1502,19 @@ Test AnonymousFunctions[] =
                                 "                               }), int, &(void __cdecl (anonymous namespace)::Bar() {\n"
                                 "                                              int x = 1;\n"
                                 "                                              --x;\n"
-                                "                                          })>; // typedef Wrapper<&(int __cdecl (anonymous namespace)::Foo(int x) {\n"
-                                "                                                                        int y = x + 1;\n"
-                                "                                                                        return y;\n"
-                                "                                                                    }), int, &(void __cdecl (anonymous namespace)::Bar() {\n"
-                                "                                                                                   int x = 1;\n"
-                                "                                                                                   --x;\n"
-                                "                                                                               })> WrapperAlias;\n"
+                                "                                          }), &(void __cdecl (anonymous namespace)::Baz() {\n"
+                                "                                                    int y = 1;\n"
+                                "                                                    y--;\n"
+                                "                                                })>; // typedef Wrapper<&(int __cdecl (anonymous namespace)::Foo(int x) {\n"
+                                "                                                                              int y = x + 1;\n"
+                                "                                                                              return y;\n"
+                                "                                                                          }), int, &(void __cdecl (anonymous namespace)::Bar() {\n"
+                                "                                                                                         int x = 1;\n"
+                                "                                                                                         --x;\n"
+                                "                                                                                     }), &(void __cdecl (anonymous namespace)::Baz() {\n"
+                                "                                                                                               int y = 1;\n"
+                                "                                                                                               y--;\n"
+                                "                                                                                           })> WrapperAlias;\n"
                                 "[tu4.cpp]\n"
                                 "using WrapperAlias = Wrapper<&(int __cdecl (anonymous namespace)::Foo(int x) {\n"
                                 "                                   int y = x + 2;\n"
@@ -1510,13 +1522,19 @@ Test AnonymousFunctions[] =
                                 "                               }), int, &(void __cdecl (anonymous namespace)::Bar() {\n"
                                 "                                              int x = 1;\n"
                                 "                                              --x;\n"
-                                "                                          })>; // typedef Wrapper<&(int __cdecl (anonymous namespace)::Foo(int x) {\n"
-                                "                                                                        int y = x + 2;\n"
-                                "                                                                        return y;\n"
-                                "                                                                    }), int, &(void __cdecl (anonymous namespace)::Bar() {\n"
-                                "                                                                                   int x = 1;\n"
-                                "                                                                                   --x;\n"
-                                "                                                                               })> WrapperAlias;\n"
+                                "                                          }), &(void __cdecl (anonymous namespace)::Baz() {\n"
+                                "                                                    int y = 1;\n"
+                                "                                                    y--;\n"
+                                "                                                })>; // typedef Wrapper<&(int __cdecl (anonymous namespace)::Foo(int x) {\n"
+                                "                                                                              int y = x + 2;\n"
+                                "                                                                              return y;\n"
+                                "                                                                          }), int, &(void __cdecl (anonymous namespace)::Bar() {\n"
+                                "                                                                                         int x = 1;\n"
+                                "                                                                                         --x;\n"
+                                "                                                                                     }), &(void __cdecl (anonymous namespace)::Baz() {\n"
+                                "                                                                                               int y = 1;\n"
+                                "                                                                                               y--;\n"
+                                "                                                                                           })> WrapperAlias;\n"
                               , output, "mismatched output");
             }
         }
