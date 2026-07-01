@@ -1451,5 +1451,75 @@ Test AnonymousFunctions[] =
             }
         }
     },
+    {"Two two-line Functions in an anonymous namespace used as a non-type template parameter to test indenting", []
+        {
+            std::string code1 = "namespace { int Foo(int x) { int y = x+1; return y; } void Bar() { int x=1; --x; } } template<int(*F)(int), typename T, void(*B)()> struct Wrapper {}; typedef Wrapper<Foo,int,Bar> WrapperAlias;";
+            std::string code2 = "namespace { int Foo(int x) { int y = x+2; return y; } void Bar() { int x=1; --x; } } template<int(*F)(int), typename T, void(*B)()> struct Wrapper {}; typedef Wrapper<Foo,int,Bar> WrapperAlias;";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(1, maps.udtMap.size());
+            Assert::AreEqual(0, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(1, maps.typedefMap.size());
+            Assert::AreEqual(0, maps.functionMap.size());
+
+            Assert::AreEqual("template<int (*F)(int), typename T, void (*B)()> struct Wrapper {\n"
+                             "};", maps.udtMap.begin()->second[0].fullyQualified, "serialization");
+
+            Assert::AreEqual("using WrapperAlias = Wrapper<&(int __cdecl (anonymous namespace)::Foo(int x) {\n"
+                             "                                   int y = x + 1;\n"
+                             "                                   return y;\n"
+                             "                               }), int, &(void __cdecl (anonymous namespace)::Bar() {\n"
+                             "                                              int x = 1;\n"
+                             "                                              --x;\n"
+                             "                                          })>; // typedef Wrapper<&(int __cdecl (anonymous namespace)::Foo(int x) {\n"
+                             "                                                                        int y = x + 1;\n"
+                             "                                                                        return y;\n"
+                             "                                                                    }), int, &(void __cdecl (anonymous namespace)::Bar() {\n"
+                             "                                                                                   int x = 1;\n"
+                             "                                                                                   --x;\n"
+                             "                                                                               })> WrapperAlias;"
+                           , maps.typedefMap.begin()->second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: WrapperAlias\n"
+                                "[tu3.cpp]\n"
+                                "using WrapperAlias = Wrapper<&(int __cdecl (anonymous namespace)::Foo(int x) {\n"
+                                "                                   int y = x + 1;\n"
+                                "                                   return y;\n"
+                                "                               }), int, &(void __cdecl (anonymous namespace)::Bar() {\n"
+                                "                                              int x = 1;\n"
+                                "                                              --x;\n"
+                                "                                          })>; // typedef Wrapper<&(int __cdecl (anonymous namespace)::Foo(int x) {\n"
+                                "                                                                        int y = x + 1;\n"
+                                "                                                                        return y;\n"
+                                "                                                                    }), int, &(void __cdecl (anonymous namespace)::Bar() {\n"
+                                "                                                                                   int x = 1;\n"
+                                "                                                                                   --x;\n"
+                                "                                                                               })> WrapperAlias;\n"
+                                "[tu4.cpp]\n"
+                                "using WrapperAlias = Wrapper<&(int __cdecl (anonymous namespace)::Foo(int x) {\n"
+                                "                                   int y = x + 2;\n"
+                                "                                   return y;\n"
+                                "                               }), int, &(void __cdecl (anonymous namespace)::Bar() {\n"
+                                "                                              int x = 1;\n"
+                                "                                              --x;\n"
+                                "                                          })>; // typedef Wrapper<&(int __cdecl (anonymous namespace)::Foo(int x) {\n"
+                                "                                                                        int y = x + 2;\n"
+                                "                                                                        return y;\n"
+                                "                                                                    }), int, &(void __cdecl (anonymous namespace)::Bar() {\n"
+                                "                                                                                   int x = 1;\n"
+                                "                                                                                   --x;\n"
+                                "                                                                               })> WrapperAlias;\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
 
 };

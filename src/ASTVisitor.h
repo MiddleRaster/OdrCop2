@@ -253,7 +253,6 @@ namespace OdrCop2
         {
             QualType    underlying   = typedefDecl->getUnderlyingType().getCanonicalType();
             std::string aliasName    = typedefDecl->getQualifiedNameAsString();
-            std::string fqtd         = "using " + aliasName + " = ";
             std::string resolvedType = underlying.getAsString(printPolicy);
 
             // nameless or anonymous UDTs
@@ -270,16 +269,23 @@ namespace OdrCop2
                 }
                 if (needsFullInlining)
                 {
+                    std::string fqtd = "using " + aliasName + " = ";
                     fqtd += IndentBlock(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())), fqtd.size());
                     fqtd  = fqtd.substr(0, fqtd.size()-2); // strip last ";\n"
                     fqtd += "; // typedef " + resolvedType + " " + aliasName + ";";
                     return fqtd;
                 }
 
+
                 // anonymous-namespace function (or other ValueDecl) used as a non-type template argument
                 const ClassTemplateSpecializationDecl* specDecl = dyn_cast<ClassTemplateSpecializationDecl>(recordType->getDecl());
                 if (specDecl != nullptr)
                 {
+                    std::string fqtd2 = "using " + aliasName + " = " + specDecl->getSpecializedTemplate()->getNameAsString() + "<";
+
+                    // lastColumn and column are absolute
+                    int lastColumn = 0;
+
                     std::string argList;
 
                     bool anyInlined = false;
@@ -302,11 +308,17 @@ namespace OdrCop2
 
                         if (isAnonNsFunc) {
                             argList += "&(";
-                            argList += IndentBlock(ConstructFunctionSignature(funcDecl), 
-                                                   fqtd.size() + argList.size() + specDecl->getSpecializedTemplate()->getNameAsString().size()+1); // +1 for "<"
+
+                            int column = static_cast<int>(argList.size() - (argList.rfind('\n') + 1));
+                            if (lastColumn == 0)
+                                column += static_cast<int>(fqtd2.size()); // only first time
+
+                            argList += IndentBlock(ConstructFunctionSignature(funcDecl), column); // -lastColumn);
                             argList  = argList.substr(0, argList.size()-1); // remove "\n"
                             argList += ")";
+
                             anyInlined = true;
+                            lastColumn = column;
                         } else {
                             llvm::raw_string_ostream stream(argList);
                             arg.print(printPolicy, stream, /*IncludeType=*/false);
@@ -314,19 +326,17 @@ namespace OdrCop2
                     }
 
                     if (anyInlined)
-                    {   // fqtd already contains: "using Blah = "
-                        fqtd += specDecl->getSpecializedTemplate()->getNameAsString() + "<";
-                        size_t col1 = fqtd.size() - (fqtd.rfind('\n')+1);// get length of last line of fqtd
+                    {
+                        size_t col1 = fqtd2.size() - (fqtd2.rfind('\n')+1);// get length of last line of fqtd2
 
                         std::string whatWillBeReused = argList + ">";
+                        fqtd2 += whatWillBeReused + "; // typedef " + specDecl->getSpecializedTemplate()->getNameAsString() + "<";
 
-                        fqtd += whatWillBeReused + "; // typedef " + specDecl->getSpecializedTemplate()->getNameAsString() + "<";
-                        size_t col2 = fqtd.size() - (fqtd.rfind('\n')+1); // get length of last line of fqtd
-
-                        fqtd += IndentBlock(whatWillBeReused, col2-col1);
-                        fqtd  = fqtd.substr(0, fqtd.size()-1); // remove "\n"
-                        fqtd += " " + aliasName + ";";
-                        return fqtd;
+                        size_t col2 = fqtd2.size() - (fqtd2.rfind('\n')+1); // get length of last line of fqtd2
+                        fqtd2 += IndentBlock(whatWillBeReused, col2-col1);
+                        fqtd2  = fqtd2.substr(0, fqtd2.size()-1); // remove "\n"
+                        fqtd2 += " " + aliasName + ";";
+                        return fqtd2;
                     }
                 }
             }
@@ -352,12 +362,11 @@ namespace OdrCop2
                     enumSig = enumSig.substr(5); // strip off "enum "
                     enumSig = "enum (anonymous namespace)::" + enumSig;
                 }
-                fqtd += enumSig + "; // typedef " + enumSig + " " + aliasName + ";";
-                return fqtd;
+
+                return "using " + aliasName + " = " + enumSig + "; // typedef " + enumSig + " " + aliasName + ";";
             }
-            
-            fqtd += resolvedType + "; // typedef " + resolvedType + " " + aliasName + ";";
-            return fqtd;
+
+            return "using " + aliasName + " = " + resolvedType + "; // typedef " + resolvedType + " " + aliasName + ";";
         }
         std::string ConstructTemplateAliasSignature(const clang::TypeAliasTemplateDecl* tatDecl)
         {
@@ -1757,8 +1766,7 @@ namespace OdrCop2
                 if (first) {
                     first = false;
                     out += firstLinePrefix + line + "\n";
-                }
-                else
+                } else
                     out +=     indentation + line + "\n";
             }
             return out;
