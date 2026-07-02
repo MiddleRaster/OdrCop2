@@ -200,6 +200,26 @@ namespace OdrCop2
             {
                 out += cvPrefix + ConstructEnumDefinition(enumTy->getDecl());
                 out += ptrSuffix + " " + key;
+            } 
+            else if (const auto* arr = dyn_cast<clang::ArrayType>(qt.getTypePtr()))
+            {
+                QualType elem = arr->getElementType().getCanonicalType();
+
+                if (auto* elemRec = elem->getAsCXXRecordDecl()) {
+                    out += cvPrefix;
+                    out += IndentBlock(ConstructRecordSignature(elemRec), out.size());
+                    out = out.substr(0, out.size() - 2); // strip last ";\n"
+                }
+                else if (auto* elemEnumTy = dyn_cast<clang::EnumType>(elem.getTypePtr()))
+                    out += cvPrefix + ConstructEnumDefinition(elemEnumTy->getDecl());
+                else
+                    out += cvPrefix + elem.getUnqualifiedType().getAsString(printPolicy);
+
+                if (const auto* cat = dyn_cast<clang::ConstantArrayType>(arr)) {
+                    uint64_t n = cat->getSize().getZExtValue();
+                    out += ptrSuffix + " " + key + "[" + std::to_string(n) + "]";
+                } else
+                    out += ptrSuffix + " " + key + "[]";
             } else
                 out += varDecl->getType().getUnqualifiedType().getAsString(printPolicy) + " " + key;
 

@@ -1711,4 +1711,114 @@ Test AnonymousObject[] =
             }
         }
     },
+    {"Used as part of a chained decltype", []
+        {
+            std::string code1 = "namespace { struct Foo { int a;        }; Foo instance; } decltype(instance) a; decltype(a) b;";
+            std::string code2 = "namespace { struct Foo { int a; int b; }; Foo instance; } decltype(instance) a; decltype(a) b;";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(0, maps.udtMap.size());
+            Assert::AreEqual(2, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(0, maps.typedefMap.size());
+            Assert::AreEqual(0, maps.functionMap.size());
+
+            auto it = maps.varMap.begin();
+            Assert::AreEqual("struct (anonymous namespace)::Foo { // sizeof=4\n"
+                             "   int a;\n"
+                             "} a;"
+                           , (*it++).second[0].fullyQualified, "serialization");
+            Assert::AreEqual("struct (anonymous namespace)::Foo { // sizeof=4\n"
+                             "   int a;\n"
+                             "} b;"
+                           , (*it++).second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(2, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: a\n"
+                                "[tu3.cpp]\n"
+                                "struct (anonymous namespace)::Foo { // sizeof=4\n"
+                                "   int a;\n"
+                                "} a;\n"
+                                "[tu4.cpp]\n"
+                                "struct (anonymous namespace)::Foo { // sizeof=8\n"
+                                "   int a;\n"
+                                "   int b;\n"
+                                "} a;\n"
+                                "\n"
+                                "ODR VIOLATION: b\n"
+                                "[tu3.cpp]\n"
+                                "struct (anonymous namespace)::Foo { // sizeof=4\n"
+                                "   int a;\n"
+                                "} b;\n"
+                                "[tu4.cpp]\n"
+                                "struct (anonymous namespace)::Foo { // sizeof=8\n"
+                                "   int a;\n"
+                                "   int b;\n"
+                                "} b;\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
+    {"Used as the type of for an array", []
+        {
+            std::string code1 = "namespace { struct Foo { int a;        }; Foo instances[4]; } decltype(instances) other_array; decltype(instances[0]) other_elem = instances[1];";
+            std::string code2 = "namespace { struct Foo { int a; int b; }; Foo instances[4]; } decltype(instances) other_array; decltype(instances[0]) other_elem = instances[1];";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(0, maps.udtMap.size());
+            Assert::AreEqual(2, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(0, maps.typedefMap.size());
+            Assert::AreEqual(0, maps.functionMap.size());
+
+            auto it = maps.varMap.begin();
+            Assert::AreEqual("struct (anonymous namespace)::Foo { // sizeof=4\n"
+                             "   int a;\n"
+                             "} other_array[4];"
+                           , (*it++).second[0].fullyQualified, "serialization");
+            Assert::AreEqual("struct (anonymous namespace)::Foo { // sizeof=4\n"
+                             "   int a;\n"
+                             "} & other_elem;"
+                           , (*it++).second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(2, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: other_array\n"
+                                "[tu3.cpp]\n"
+                                "struct (anonymous namespace)::Foo { // sizeof=4\n"
+                                "   int a;\n"
+                                "} other_array[4];\n"
+                                "[tu4.cpp]\n"
+                                "struct (anonymous namespace)::Foo { // sizeof=8\n"
+                                "   int a;\n"
+                                "   int b;\n"
+                                "} other_array[4];\n"
+                                "\n"
+                                "ODR VIOLATION: other_elem\n"
+                                "[tu3.cpp]\n"
+                                "struct (anonymous namespace)::Foo { // sizeof=4\n"
+                                "   int a;\n"
+                                "} & other_elem;\n"
+                                "[tu4.cpp]\n"
+                                "struct (anonymous namespace)::Foo { // sizeof=8\n"
+                                "   int a;\n"
+                                "   int b;\n"
+                                "} & other_elem;\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
+
+
 };
