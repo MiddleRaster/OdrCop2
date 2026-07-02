@@ -1388,28 +1388,26 @@ namespace OdrCop2
                         IndirectionCvStripper ics(field->getType().getCanonicalType());
                         const QualType qualType = ics.GetBaseType();
                         const clang::Type* type = qualType.getTypePtr();
+
+                        std::string definition;
+
                         const auto* recordType  = clang::dyn_cast<clang::RecordType>(type);
                         if (recordType && recordType->getDecl()->isInAnonymousNamespace())
                         {
-                            out += ics.ConstructPrefix() + ConstructAttributes(field);
-                            out += IndentBlock(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())), 3);
-                            out  = out.substr(0, out.size()-2);
-                            out += ics.ConstructPointersAndReferences() + ics.ConstructSuffixWithName(field->getNameAsString());
+                            definition = IndentBlock(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())), 3);
+                            definition = definition.substr(0, definition.size()-2);
                         }
                         else if (const auto* enumTy = llvm::dyn_cast<clang::EnumType>(type); enumTy && !enumTy->getDecl()->getIdentifier())
-                        { // nameless enum
-                            out += ics.ConstructPrefix() + ConstructAttributes(field);
-                            out += ConstructEnumDefinition(enumTy->getDecl());
-                            out += ics.ConstructPointersAndReferences() + ics.ConstructSuffixWithName(field->getNameAsString());
-                        }
+                            definition = ConstructEnumDefinition(enumTy->getDecl()); // nameless enum
                         else if (const auto* enumTy = llvm::dyn_cast<clang::EnumType>(type); enumTy && enumTy->getDecl()->isInAnonymousNamespace())
-                        { // enum defined in anonymous namespace
+                            definition = ConstructEnumDefinition(enumTy->getDecl()); // enum defined in anonymous namespace
+
+                        if (!definition.empty()) {
                             out += ics.ConstructPrefix() + ConstructAttributes(field);
-                            out += ConstructEnumDefinition(enumTy->getDecl());
+                            out += definition;
                             out += ics.ConstructPointersAndReferences() + ics.ConstructSuffixWithName(field->getNameAsString());
-                        }
-                        else
-                        { // field must be done this way to handle array fields as well.
+                        } else {
+                            // field must be done this way to handle array fields as well.
                             std::string fieldStr;
                             llvm::raw_string_ostream os(fieldStr);
                             field->getType().print(os, printPolicy, field->getNameAsString());
