@@ -757,8 +757,7 @@ namespace OdrCop2
                     funcDecl2->printQualifiedName(os, printPolicy);
                     os.flush();
                     fqn += out;
-                }
-                else
+                } else
                     fqn += funcDecl2->getNameAsString();
 
                 if (const auto* args = funcDecl->getTemplateSpecializationArgs())
@@ -801,43 +800,51 @@ namespace OdrCop2
 
             for (const ParmVarDecl* param : funcDecl->parameters())
             {
-                IndirectionCvStripper ics(param->getType().getCanonicalType());
-                const auto*  recordType = dyn_cast<clang::RecordType>(ics.GetBaseType().getTypePtr());
+                std::string arraySuffix; // will be empty unless the parameter is an array
+
+                QualType canonBaseType;
+                if (const auto* arr = dyn_cast<clang::ArrayType>(param->getOriginalType().getTypePtr())) // Detect array from the original type (declarator), not the decayed type
+                {   // Build the [] / [N] suffix
+                    if (const auto* cat = dyn_cast<clang::ConstantArrayType>(arr))
+                        arraySuffix = "[" + std::to_string(cat->getSize().getZExtValue()) + "]";
+                    else
+                        arraySuffix = "[]";
+                    canonBaseType = arr->getElementType().getCanonicalType(); // Element type is what we want to feed into IndirectionCvStripper
+                } else
+                    canonBaseType = param->getType().getCanonicalType(); // Non-array: keep your existing behavior
+
+                IndirectionCvStripper ics(canonBaseType);
+
+                const auto* recordType = dyn_cast<clang::RecordType>(ics.GetBaseType().getTypePtr());
                 if (recordType && recordType->getDecl()->isInAnonymousNamespace())
                 {
                     fqn += IndentBlock(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())),
-                                                                fqn.size() - (fqn.rfind('\n') + 1) + ics.ConstructPrefix().size(),
-                                                                ics.ConstructPrefix());
+                                       fqn.size() - (fqn.rfind('\n')+1) + ics.ConstructPrefix().size(),
+                                       ics.ConstructPrefix());
                     fqn  = fqn.substr(0, fqn.size()-2); // strip off last ";\n"
                     fqn += ics.ConstructPointersAndReferences();
                 }
                 else if (recordType && dyn_cast<ClassTemplateSpecializationDecl>(recordType->getDecl()))
                 {
                     const auto* spec = dyn_cast<ClassTemplateSpecializationDecl>(recordType->getDecl());
-                    for (const auto& arg : spec->getTemplateArgs().asArray())
-                    {
-                        fqn += ics.ConstructPrefix() + spec->getQualifiedNameAsString();
-                        fqn += IndentBlock(TemplateArgsToString(spec->getTemplateArgs(), false), fqn.size());
-                        fqn  = fqn.substr(0, fqn.size() - 2); // strip last ";\n"
-                        fqn += ">" + ics.ConstructPointersAndReferences();
-                    }
-                    // else if no anonymous type(s), fqn += param->getType().getAsString(printPolicy); // No longer checking if any type arg is from an anonymous namespace
+                    fqn += ics.ConstructPrefix() + spec->getQualifiedNameAsString();
+                    fqn += IndentBlock(TemplateArgsToString(spec->getTemplateArgs(), false), fqn.size());
+                    fqn  = fqn.substr(0, fqn.size()-2); // strip last ";\n"
+                    fqn += ">" + ics.ConstructPointersAndReferences();
                 }
-                else if (const auto* enumTy = dyn_cast<clang::EnumType>(ics.GetBaseType().getTypePtr()); enumTy && enumTy->getDecl()->isInAnonymousNamespace())
-                {
+                else if (const auto* enumTy = dyn_cast<clang::EnumType>(ics.GetBaseType().getTypePtr()); enumTy && enumTy->getDecl()->isInAnonymousNamespace()) {
                     fqn += ics.ConstructPrefix() + ConstructEnumDefinition(enumTy->getDecl());
                     fqn += ics.ConstructPointersAndReferences();
-                }
-                else
+                } else
                     fqn += param->getType().getAsString(printPolicy);
 
                 // if there is no parameter name, skip this
                 if (param->getName().str() != "")
                     fqn += " " + param->getName().str();
+                fqn += arraySuffix; // append array declarator; will be non-empty if the original parameter was an array
 
-                // Default argument, if any
                 if (param->hasDefaultArg())
-                {
+                {   // Default argument, if any
                     std::string out;
                     llvm::raw_string_ostream os(out);
                     param->getDefaultArg()->printPretty(os, nullptr, printPolicy);
