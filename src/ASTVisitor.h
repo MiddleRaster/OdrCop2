@@ -184,6 +184,8 @@ namespace OdrCop2
             if (qt.isVolatileQualified()) cvPrefix += "volatile ";
             qt = qt.getUnqualifiedType();
 
+            qt = qt.getCanonicalType(); // normalize sugar (typedef, decltype, elaborated, etc.)
+
             CXXRecordDecl* record = qt->getAsCXXRecordDecl();
             if (record && record->isInAnonymousNamespace() && record->getIdentifier() != nullptr)
             {
