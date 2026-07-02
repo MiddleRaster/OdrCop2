@@ -1015,6 +1015,49 @@ Test AnonymousEnums[] =
             }
         }
     },
+    {"Anonymous namespace enum used as a field where it's an array", []
+        {
+            std::string code1 = "namespace { enum Color { Red, Green, Blue        }; } struct Outer { Color field[2]; }; extern void consume(Outer*); void consume(Outer* p) { (void)p; }";
+            std::string code2 = "namespace { enum Color { Red, Green, Blue, Alpha }; } struct Outer { Color field[2]; }; extern void consume(Outer*);";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(1, maps.udtMap.size());
+            Assert::AreEqual(0, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(0, maps.typedefMap.size());
+            Assert::AreEqual(1, maps.functionMap.size());
+
+            Assert::AreEqual("void __cdecl consume(Outer * p) { (void)p; }"
+                           , maps.functionMap.begin()->second[0].fullyQualified, "serialization");
+            Assert::AreEqual("struct Outer { // sizeof=8\n"
+                             "   enum (anonymous namespace)::Color { Red=0, Green=1, Blue=2 } field[2];\n"
+                             "};"
+                           , maps.udtMap.begin()->second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code1);
+                Assert::AreEqual(0, violations, "wrong number of violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: Outer\n"
+                                "[tu3.cpp]\n"
+                                "struct Outer { // sizeof=8\n"
+                                "   enum (anonymous namespace)::Color { Red=0, Green=1, Blue=2 } field[2];\n"
+                                "};\n"
+                                "[tu4.cpp]\n"
+                                "struct Outer { // sizeof=8\n"
+                                "   enum (anonymous namespace)::Color { Red=0, Green=1, Blue=2, Alpha=3 } field[2];\n"
+                                "};\n", output, "mismatched output");
+            }
+        }
+    },
     {"Anonymous namespace enum used as an argument to a function", []
         {
             std::string code1 = "namespace { enum Color { Red, Green, Blue        }; } extern void consume(Color); void consume(Color c) { (void)c; }";
@@ -1045,7 +1088,7 @@ Test AnonymousEnums[] =
             }
         }
     },
-    {"Anonymous namespace enum used as an array argument to a function", []
+    {"Anonymous namespace enum used as an array argument (which ALWAYS decays to a pointer) to a function", []
         {
             std::string code1 = "namespace { enum Color { Red, Green, Blue        }; } extern void consume(Color c[2]); void consume(Color c[2]) { (void)c; }";
             std::string code2 = "namespace { enum Color { Red, Green, Blue, Alpha }; } extern void consume(Color c[2]);";
@@ -1060,7 +1103,7 @@ Test AnonymousEnums[] =
             Assert::AreEqual(0, maps.typedefMap.size());
             Assert::AreEqual(1, maps.functionMap.size());
 
-            Assert::AreEqual("void __cdecl consume(enum (anonymous namespace)::Color { Red=0, Green=1, Blue=2 } c[2]) { (void)c; }"
+            Assert::AreEqual("void __cdecl consume(enum (anonymous namespace)::Color { Red=0, Green=1, Blue=2 } * c) { (void)c; }"
                            , maps.functionMap.begin()->second[0].fullyQualified, "serialization");
 
             {
@@ -1070,6 +1113,32 @@ Test AnonymousEnums[] =
             }
         }
     },
+    {"Anonymous namespace enum used as a reference to a fixed-size array argument to a function", []
+        {
+            std::string code1 = "namespace { enum Color { Red, Green, Blue        }; } extern void consume(Color (&c)[2]); void consume(Color (&c)[2]) { (void)c; }";
+            std::string code2 = "namespace { enum Color { Red, Green, Blue, Alpha }; } extern void consume(Color (&c)[2]);";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(0, maps.udtMap.size());
+            Assert::AreEqual(0, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(0, maps.typedefMap.size());
+            Assert::AreEqual(1, maps.functionMap.size());
+
+            Assert::AreEqual("void __cdecl consume(enum (anonymous namespace)::Color { Red=0, Green=1, Blue=2 } (&c)[2]) { (void)c; }"
+                           , maps.functionMap.begin()->second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(0, violations, "wrong number of ODR violations");
+                Assert::AreEqual("", output, "mismatched output");
+            }
+        }
+    },
+
     {"Anonymous namespace enum used as a function return value", []
         {
             std::string code1 = "namespace { enum Color { Red, Green, Blue,       }; } extern Color consume(); Color consume() { return Red; }";
@@ -1123,6 +1192,38 @@ Test AnonymousEnums[] =
                                 "[tu3.cpp] - same as above\n"
                                 "[tu4.cpp]\n"
                                 "enum (anonymous namespace)::Color { Red=0, Green=1, Blue=2, Alpha=3 } globalColor;\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
+    {"Anonymous namespace enum used as a global variable that is an array", []
+        {
+            std::string code1 = "namespace { enum Color { Red, Green, Blue,       }; } extern Color globalColor[2]; Color globalColor[2] = {Red, Blue};";
+            std::string code2 = "namespace { enum Color { Red, Green, Blue, Alpha }; } extern Color globalColor[2];";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(0, maps.udtMap.size());
+            Assert::AreEqual(1, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(0, maps.typedefMap.size());
+            Assert::AreEqual(0, maps.functionMap.size());
+
+            Assert::AreEqual("enum (anonymous namespace)::Color { Red=0, Green=1, Blue=2 } globalColor[2];"
+                           , maps.varMap.begin()->second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: globalColor\n"
+                                "[tu3.cpp]\n"
+                                "enum (anonymous namespace)::Color { Red=0, Green=1, Blue=2 } globalColor[2];\n"
+                                "[tu3.cpp] - same as above\n"
+                                "[tu4.cpp]\n"
+                                "enum (anonymous namespace)::Color { Red=0, Green=1, Blue=2, Alpha=3 } globalColor[2];\n"
                               , output, "mismatched output");
             }
         }

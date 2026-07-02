@@ -556,12 +556,13 @@ namespace OdrCop2
 
         class IndirectionCvStripper
         {
-            enum class IndirKind { Ptr, LRef, RRef };
+            enum class IndirKind { Ptr, LRef, RRef, Array };
             struct IndirLayer
             {
                 IndirKind kind;
                 bool      isConst;    // const on this declarator layer (e.g. T* const)
                 bool      isVolatile; // volatile on this declarator layer (rarely seen but correct)
+                uint64_t  arraySize;  // 0 means “[]”, nonzero means “[N]”
             };
             const std::vector<IndirLayer> layers; // outermost last, so we append in reverse
             const bool baseConst;
@@ -588,7 +589,15 @@ namespace OdrCop2
                         layers.push_back({IndirKind::RRef, false, false});
                         qualType = rt->getPointeeType().getCanonicalType();
                     }
-                    else
+                    else if (const auto* at = dyn_cast<ArrayType>(qualType.getTypePtr()))
+                    {
+                        uint64_t n = 0;
+                        if (const auto* cat = dyn_cast<ConstantArrayType>(at))
+                            n = cat->getSize().getZExtValue();
+
+                        layers.push_back({IndirKind::Array, false, false, n});
+                        qualType = at->getElementType().getCanonicalType();
+                    } else
                         break;
                 }
                 return {std::move(layers), qualType, qualType.isConstQualified(), qualType.isVolatileQualified()};
@@ -600,6 +609,8 @@ namespace OdrCop2
                 , baseVolatile(std::get<3>(t))
             {}
 
+            bool HasArray    () const { for (auto& layer : layers) if (layer.kind == IndirKind::Array                                ) return true; return false; }
+            bool HasReference() const { for (auto& layer : layers) if (layer.kind == IndirKind::LRef || layer.kind == IndirKind::RRef) return true; return false; }
         public:
             explicit IndirectionCvStripper(QualType qualType) : IndirectionCvStripper(Peel(qualType)) {}
 
@@ -616,8 +627,8 @@ namespace OdrCop2
             {
                 std::string out;
 
-                if (layers.size() > 0)
-                    out += " "; // put a space between type and * or &
+                if (HasArray() && HasReference())
+                    out += " ("; // someType (&someName)[N] case
 
                 // Re-apply layers in reverse (innermost first)
                 for (auto it = layers.rbegin(); it != layers.rend(); ++it)
@@ -630,6 +641,34 @@ namespace OdrCop2
                     }
                     if (it->isConst)      out += "const ";
                     if (it->isVolatile)   out += "volatile ";
+                }
+
+                // if the layers were not all arrays
+                if (!out.starts_with(" ("))
+                    if (out.size() > 0)
+                        out = " " + out; // put a space between type and * or &
+                return out;
+            }
+            std::string ConstructSuffixWithName(const std::string& name) const
+            {
+                std::string out;
+
+                if (HasArray() && HasReference()) {
+                    out += name;
+                    out += ")"; // someType (&someName)[N] case
+                } else
+                    if (name != "")
+                         out += " " + name;
+
+                for (auto it=layers.rbegin(); it!=layers.rend(); ++it) // layers are outermost last, so append in reverse
+                {
+                    if (it->kind == IndirKind::Array)
+                    {
+                        if (it->arraySize == 0)
+                            out += "[]";
+                        else
+                            out += "[" + std::to_string(it->arraySize) + "]";
+                    }
                 }
                 return out;
             }
@@ -710,8 +749,7 @@ namespace OdrCop2
                                                                 ics.ConstructPrefix());
                     fqn  = fqn.substr(0, fqn.size()-2); // remove "; "
                     fqn += ics.ConstructPointersAndReferences();
-                }
-                else
+                } else
                     fqn += qualType.getAsString(printPolicy);
             }
 
@@ -800,20 +838,7 @@ namespace OdrCop2
 
             for (const ParmVarDecl* param : funcDecl->parameters())
             {
-                std::string arraySuffix; // will be empty unless the parameter is an array
-
-                QualType canonBaseType;
-                if (const auto* arr = dyn_cast<clang::ArrayType>(param->getOriginalType().getTypePtr())) // Detect array from the original type (declarator), not the decayed type
-                {   // Build the [] / [N] suffix
-                    if (const auto* cat = dyn_cast<clang::ConstantArrayType>(arr))
-                        arraySuffix = "[" + std::to_string(cat->getSize().getZExtValue()) + "]";
-                    else
-                        arraySuffix = "[]";
-                    canonBaseType = arr->getElementType().getCanonicalType(); // Element type is what we want to feed into IndirectionCvStripper
-                } else
-                    canonBaseType = param->getType().getCanonicalType(); // Non-array: keep your existing behavior
-
-                IndirectionCvStripper ics(canonBaseType);
+                IndirectionCvStripper ics(param->getType().getCanonicalType());
 
                 const auto* recordType = dyn_cast<clang::RecordType>(ics.GetBaseType().getTypePtr());
                 if (recordType && recordType->getDecl()->isInAnonymousNamespace())
@@ -838,10 +863,8 @@ namespace OdrCop2
                 } else
                     fqn += param->getType().getAsString(printPolicy);
 
-                // if there is no parameter name, skip this
-                if (param->getName().str() != "")
-                    fqn += " " + param->getName().str();
-                fqn += arraySuffix; // append array declarator; will be non-empty if the original parameter was an array
+                // append name, etc., as needed
+                fqn += ics.ConstructSuffixWithName(param->getName().str());
 
                 if (param->hasDefaultArg())
                 {   // Default argument, if any
@@ -1371,15 +1394,19 @@ namespace OdrCop2
                             out += ics.ConstructPrefix() + ConstructAttributes(field);
                             out += IndentBlock(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recordType->getDecl())), 3);
                             out  = out.substr(0, out.size()-2);
-                            out += ics.ConstructPointersAndReferences() + " " + field->getNameAsString();
+                            out += ics.ConstructPointersAndReferences() + ics.ConstructSuffixWithName(field->getNameAsString());
                         }
                         else if (const auto* enumTy = llvm::dyn_cast<clang::EnumType>(type); enumTy && !enumTy->getDecl()->getIdentifier())
                         { // nameless enum
-                            out += ConstructEnumDefinition(enumTy->getDecl()) + " " + field->getNameAsString();
+                            out += ics.ConstructPrefix() + ConstructAttributes(field);
+                            out += ConstructEnumDefinition(enumTy->getDecl());
+                            out += ics.ConstructPointersAndReferences() + ics.ConstructSuffixWithName(field->getNameAsString());
                         }
                         else if (const auto* enumTy = llvm::dyn_cast<clang::EnumType>(type); enumTy && enumTy->getDecl()->isInAnonymousNamespace())
                         { // enum defined in anonymous namespace
-                            out += ConstructEnumDefinition(enumTy->getDecl()) + " " + field->getNameAsString();
+                            out += ics.ConstructPrefix() + ConstructAttributes(field);
+                            out += ConstructEnumDefinition(enumTy->getDecl());
+                            out += ics.ConstructPointersAndReferences() + ics.ConstructSuffixWithName(field->getNameAsString());
                         }
                         else
                         { // field must be done this way to handle array fields as well.
