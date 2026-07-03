@@ -2149,6 +2149,51 @@ Test AnonymousObject[] =
             }
         }
     },
+    {"Used to initialize a global with a function pointer where one arg is a function pointer with a multiline anonymous namespace arg (to test indenting)", []
+        {
+            std::string code1 = "namespace { struct Foo { int a;        }; Foo(*factory)(void (*)(Foo*)); } decltype(factory) other_factory;";
+            std::string code2 = "namespace { struct Foo { int a; int b; }; Foo(*factory)(void (*)(Foo*)); } decltype(factory) other_factory;";
 
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(0, maps.udtMap.size());
+            Assert::AreEqual(1, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(0, maps.typedefMap.size());
+            Assert::AreEqual(0, maps.functionMap.size());
+
+            auto it = maps.varMap.begin();
+            Assert::AreEqual("struct (anonymous namespace)::Foo { // sizeof=4\n"
+                             "   int a;\n"
+                             "} (*other_factory)(void (*)(struct (anonymous namespace)::Foo { // sizeof=4\n"
+                             "                               int a;\n"
+                             "                            } *));"
+                           , (*it++).second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: other_factory\n"
+                                "[tu3.cpp]\n"
+                                "struct (anonymous namespace)::Foo { // sizeof=4\n"
+                                "   int a;\n"
+                                "} (*other_factory)(void (*)(struct (anonymous namespace)::Foo { // sizeof=4\n"
+                                "                               int a;\n"
+                                "                            } *));\n"
+                                "[tu4.cpp]\n"
+                                "struct (anonymous namespace)::Foo { // sizeof=8\n"
+                                "   int a;\n"
+                                "   int b;\n"
+                                "} (*other_factory)(void (*)(struct (anonymous namespace)::Foo { // sizeof=8\n"
+                                "                               int a;\n"
+                                "                               int b;\n"
+                                "                            } *));\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
 
 };

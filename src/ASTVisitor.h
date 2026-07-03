@@ -337,7 +337,8 @@ namespace OdrCop2
                     if (auto* innerFuncTy = llvm::dyn_cast<clang::FunctionProtoType>(ptrTy->getPointeeType().getTypePtr()))
                     {
                         std::string innerPtrSuffix = IndirectionCvStripper(canonicalQT).ConstructPointersAndReferences();
-                        out += ConstructPointerToFunctionSignature(innerFuncTy, innerPtrSuffix, "");
+                        out += IndentBlock(ConstructPointerToFunctionSignature(innerFuncTy, innerPtrSuffix, ""), out.size() - (out.rfind('\n')+1));
+                        out  = out.substr(0, out.size()-1); // strip "\n"
                         continue;
                     }
                 }
