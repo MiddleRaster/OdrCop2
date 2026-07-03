@@ -251,23 +251,23 @@ namespace OdrCop2
                     IndirectionCvStripper ics(canonicalQT);
 
                     const auto* recordType = llvm::dyn_cast<clang::RecordType>(ics.GetBaseType().getTypePtr());
-                    if (recordType && recordType->getDecl()->isInAnonymousNamespace())
-                    {
-                        out += ics.ConstructPrefix();
-                        out += IndentBlock(ConstructRecordSignature(llvm::dyn_cast<CXXRecordDecl>(recordType->getDecl())), out.size() - (out.rfind('\n')+1));
-                        out = out.substr(0, out.size()-2); // strip ";\n"
-                        out += ics.ConstructPointersAndReferences();
-                    }
-                    else if (recordType && llvm::dyn_cast<ClassTemplateSpecializationDecl>(recordType->getDecl())) {
+                    if (recordType && llvm::dyn_cast<ClassTemplateSpecializationDecl>(recordType->getDecl()))
+                    { // class template instantiations
                         const auto* spec = llvm::dyn_cast<ClassTemplateSpecializationDecl>(recordType->getDecl());
                         out += ics.ConstructPrefix();
                         out += spec->getQualifiedNameAsString();
                         out += IndentBlock(TemplateArgsToString(spec->getTemplateArgs(), false), out.size() - (out.rfind('\n')+1));
-                        out = out.substr(0, out.size() - 2); // strip ";\n"
+                        out  = out.substr(0, out.size() - 2); // strip ";\n"
                         out += ">" + ics.ConstructPointersAndReferences();
                     }
-                    else if (const auto* enumTy = llvm::dyn_cast<clang::EnumType>(ics.GetBaseType().getTypePtr());
-                                         enumTy && enumTy->getDecl()->isInAnonymousNamespace())
+                    else if (recordType && recordType->getDecl()->isInAnonymousNamespace())
+                    { // UDTs
+                        out += ics.ConstructPrefix();
+                        out += IndentBlock(ConstructRecordSignature(llvm::dyn_cast<CXXRecordDecl>(recordType->getDecl())), out.size() - (out.rfind('\n')+1));
+                        out  = out.substr(0, out.size()-2); // strip ";\n"
+                        out += ics.ConstructPointersAndReferences();
+                    }
+                    else if (const auto* enumTy = llvm::dyn_cast<clang::EnumType>(ics.GetBaseType().getTypePtr()); enumTy && enumTy->getDecl()->isInAnonymousNamespace())
                     { // enums
                         out += ics.ConstructPrefix();
                         out += ConstructEnumDefinition(enumTy->getDecl());
