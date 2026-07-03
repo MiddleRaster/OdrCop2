@@ -220,6 +220,76 @@ namespace OdrCop2
                     out += ptrSuffix + " " + key + "[" + std::to_string(n) + "]";
                 } else
                     out += ptrSuffix + " " + key + "[]";
+            }
+            else if (const auto* funcTy = llvm::dyn_cast<clang::FunctionProtoType>(qt.getTypePtr()))
+            {
+                // return type
+                QualType ret = funcTy->getReturnType().getCanonicalType();
+                if (auto* retRec = ret->getAsCXXRecordDecl(); retRec && retRec->isInAnonymousNamespace() && retRec->getIdentifier() != nullptr)
+                {
+                    out += IndentBlock(ConstructRecordSignature(retRec), out.size());
+                    out = out.substr(0, out.size() - 2); // strip ";\n"
+                } else if (auto* retEnum = llvm::dyn_cast<clang::EnumType>(ret.getTypePtr()); retEnum && retEnum->getDecl()->isInAnonymousNamespace())
+                    out += ConstructEnumDefinition(retEnum->getDecl());
+                else
+                    out += ret.getUnqualifiedType().getAsString(printPolicy);
+
+                // function pointer name
+                out += " (";
+                out += ptrSuffix.substr(1); // " *", " &", " const *", etc. // substr(1) to remove the leading ' '
+                out += key;
+                out += ")";
+
+                // Parameter list
+                out += "(";
+                for (unsigned i=0; i<funcTy->getNumParams(); ++i)
+                {
+                    if (i > 0)
+                        out += ", ";
+
+                    QualType canonicalQT = funcTy->getParamType(i).getCanonicalType();
+                    IndirectionCvStripper ics(canonicalQT);
+
+                    const auto* recordType = llvm::dyn_cast<clang::RecordType>(ics.GetBaseType().getTypePtr());
+                    if (recordType && recordType->getDecl()->isInAnonymousNamespace())
+                    {
+                        out += ics.ConstructPrefix();
+                        out += IndentBlock(ConstructRecordSignature(llvm::dyn_cast<CXXRecordDecl>(recordType->getDecl())), out.size() - (out.rfind('\n')+1));
+                        out = out.substr(0, out.size()-2); // strip ";\n"
+                        out += ics.ConstructPointersAndReferences();
+                    }
+                    else if (recordType && llvm::dyn_cast<ClassTemplateSpecializationDecl>(recordType->getDecl())) {
+                        const auto* spec = llvm::dyn_cast<ClassTemplateSpecializationDecl>(recordType->getDecl());
+                        out += ics.ConstructPrefix();
+                        out += spec->getQualifiedNameAsString();
+                        out += IndentBlock(TemplateArgsToString(spec->getTemplateArgs(), false), out.size() - (out.rfind('\n')+1));
+                        out = out.substr(0, out.size() - 2); // strip ";\n"
+                        out += ">" + ics.ConstructPointersAndReferences();
+                    }
+                    else if (const auto* enumTy = llvm::dyn_cast<clang::EnumType>(ics.GetBaseType().getTypePtr());
+                                         enumTy && enumTy->getDecl()->isInAnonymousNamespace())
+                    { // enums
+                        out += ics.ConstructPrefix();
+                        out += ConstructEnumDefinition(enumTy->getDecl());
+                        out += ics.ConstructPointersAndReferences();
+                    }
+                    else
+                    {   // Plain type: prefix + base + ptr/ref/array layers
+                        out += ics.ConstructPrefix();
+                        out += ics.GetBaseType().getUnqualifiedType().getAsString(printPolicy);
+                        out += ics.ConstructPointersAndReferences();
+                    }
+                }
+
+                if (funcTy->isVariadic())
+                {
+                    if (funcTy->getNumParams() > 0)
+                        out += ", ";
+                    out += "...";
+                }
+
+                out += ")";
+
             } else
                 out += varDecl->getType().getUnqualifiedType().getAsString(printPolicy) + " " + key;
 
