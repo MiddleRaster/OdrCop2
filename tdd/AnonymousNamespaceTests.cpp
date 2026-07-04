@@ -19,6 +19,9 @@ Function                |       	—        |  	—      |        	—          
 Object/variable         |       	—        |  	—      |        	—          |        	—       |   	✓         |     	—         | 	✓    |      	—            |
 Class template          |       	✓        |  	✓      |        	✓          |        	✓       |   	✓         |     	✓         | 	—    |      	✓            |
 Variable template       |       	—        |  	—      |        	—          |        	—       |   	✓         |     	—         | 	✓    |      	—            |
+Typedef ???
+Template Alias ???
+
 That gives 24 distinct cells.
 
 Additional ODR-significant positions
@@ -2315,3 +2318,409 @@ Test AnonymousVars[] =
         }
     },
 };
+
+Test AnonymousClassTemplates[] =
+{
+    {"Used as a data-member", []
+        {
+            std::string code1 = "namespace { template<typename T> struct Holder { T value;          }; } struct Widget { Holder<int> h; };";
+            std::string code2 = "namespace { template<typename T> struct Holder { T value; T extra; }; } struct Widget { Holder<int> h; };";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(1, maps.udtMap.size());
+            Assert::AreEqual(0, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(0, maps.typedefMap.size());
+            Assert::AreEqual(0, maps.functionMap.size());
+
+            {
+                auto it = maps.udtMap.begin();
+                Assert::AreEqual("struct Widget { // sizeof=4\n"
+                                 "   template<> struct (anonymous namespace)::Holder<int> { // sizeof=4\n"
+                                 "      int value;\n"
+                                 "   } h;\n"
+                                 "};"
+                               , (*it++).second[0].fullyQualified, "serialization");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: Widget\n"
+                                "[tu3.cpp]\n"
+                                "struct Widget { // sizeof=4\n"
+                                "   template<> struct (anonymous namespace)::Holder<int> { // sizeof=4\n"
+                                "      int value;\n"
+                                "   } h;\n"
+                                "};\n"
+                                "[tu4.cpp]\n"
+                                "struct Widget { // sizeof=8\n"
+                                "   template<> struct (anonymous namespace)::Holder<int> { // sizeof=8\n"
+                                "      int value;\n"
+                                "      int extra;\n"
+                                "   } h;\n"
+                                "};\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
+    {"with an anonymous namespace instantiation, used as a data-member", []
+        {
+            std::string code1 = "namespace { template<class T> struct Holder { T value; }; template<> struct Holder<int> { int value; }; } struct Widget { Holder<int> h; };";
+            std::string code2 = "namespace { template<class T> struct Holder { T value; }; template<> struct Holder<int> { int value; int extra; }; } struct Widget { Holder<int> h; };";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(1, maps.udtMap.size());
+            Assert::AreEqual(0, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(0, maps.typedefMap.size());
+            Assert::AreEqual(0, maps.functionMap.size());
+
+            {
+                auto it = maps.udtMap.begin();
+                Assert::AreEqual("struct Widget { // sizeof=4\n"
+                                 "   template<> struct (anonymous namespace)::Holder<int> { // sizeof=4\n"
+                                 "      int value;\n"
+                                 "   } h;\n"
+                                 "};"
+                               , (*it++).second[0].fullyQualified, "serialization");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: Widget\n"
+                                "[tu3.cpp]\n"
+                                "struct Widget { // sizeof=4\n"
+                                "   template<> struct (anonymous namespace)::Holder<int> { // sizeof=4\n"
+                                "      int value;\n"
+                                "   } h;\n"
+                                "};\n"
+                                "[tu4.cpp]\n"
+                                "struct Widget { // sizeof=8\n"
+                                "   template<> struct (anonymous namespace)::Holder<int> { // sizeof=8\n"
+                                "      int value;\n"
+                                "      int extra;\n"
+                                "   } h;\n"
+                                "};\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
+    {"Used as a data-member but different parameter list", []
+        {
+            std::string code1 = "namespace { template<typename T                  > struct Holder { T value; }; } struct Widget { Holder<int> h; };";
+            std::string code2 = "namespace { template<typename T, typename U = int> struct Holder { T value; }; } struct Widget { Holder<int> h; };";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(1, maps.udtMap.size());
+            Assert::AreEqual(0, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(0, maps.typedefMap.size());
+            Assert::AreEqual(0, maps.functionMap.size());
+
+            {
+                auto it = maps.udtMap.begin();
+                Assert::AreEqual("struct Widget { // sizeof=4\n"
+                                 "   template<> struct (anonymous namespace)::Holder<int> { // sizeof=4\n"
+                                 "      int value;\n"
+                                 "   } h;\n"
+                                 "};"
+                               , (*it++).second[0].fullyQualified, "serialization");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: Widget\n"
+                                "[tu3.cpp]\n"
+                                "struct Widget { // sizeof=4\n"
+                                "   template<> struct (anonymous namespace)::Holder<int> { // sizeof=4\n"
+                                "      int value;\n"
+                                "   } h;\n"
+                                "};\n"
+                                "[tu4.cpp]\n"
+                                "struct Widget { // sizeof=4\n"
+                                "   template<> struct (anonymous namespace)::Holder<int, int> { // sizeof=4\n"
+                                "      int value;\n"
+                                "   } h;\n"
+                                "};\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
+    {"Used as a data-member using a NTTP", []
+        {
+            std::string code1 = "namespace { template<int N> struct Holder { int data[ N ]; }; } struct Widget { Holder<2> h; };";
+            std::string code2 = "namespace { template<int N> struct Holder { int data[N+1]; }; } struct Widget { Holder<2> h; };";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(1, maps.udtMap.size());
+            Assert::AreEqual(0, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(0, maps.typedefMap.size());
+            Assert::AreEqual(0, maps.functionMap.size());
+
+            {
+                auto it = maps.udtMap.begin();
+                Assert::AreEqual("struct Widget { // sizeof=8\n"
+                                 "   template<> struct (anonymous namespace)::Holder<2> { // sizeof=8\n"
+                                 "      int data[2];\n"
+                                 "   } h;\n"
+                                 "};"
+                               , (*it++).second[0].fullyQualified, "serialization");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: Widget\n"
+                                "[tu3.cpp]\n"
+                                "struct Widget { // sizeof=8\n"
+                                "   template<> struct (anonymous namespace)::Holder<2> { // sizeof=8\n"
+                                "      int data[2];\n"
+                                "   } h;\n"
+                                "};\n"
+                                "[tu4.cpp]\n"
+                                "struct Widget { // sizeof=12\n"
+                                "   template<> struct (anonymous namespace)::Holder<2> { // sizeof=12\n"
+                                "      int data[3];\n"
+                                "   } h;\n"
+                                "};\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
+    {"With a nested type, used as a data-member", []
+        {
+            std::string code1 = "namespace { template<typename T> struct Holder { using Type = T; Type value;            }; } struct Widget { Holder<int> h; };";
+            std::string code2 = "namespace { template<typename T> struct Holder { using Type = T; Type value; int extra; }; } struct Widget { Holder<int> h; };";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(1, maps.udtMap.size());
+            Assert::AreEqual(0, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(0, maps.typedefMap.size());
+            Assert::AreEqual(0, maps.functionMap.size());
+
+            {
+                auto it = maps.udtMap.begin();
+                Assert::AreEqual("struct Widget { // sizeof=4\n"
+                                 "   template<> struct (anonymous namespace)::Holder<int> { // sizeof=4\n"
+                                 "      using Type = int;\n"
+                                 "      Type value;\n"
+                                 "   } h;\n"
+                                 "};"
+                               , (*it++).second[0].fullyQualified, "serialization");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: Widget\n"
+                                "[tu3.cpp]\n"
+                                "struct Widget { // sizeof=4\n"
+                                "   template<> struct (anonymous namespace)::Holder<int> { // sizeof=4\n"
+                                "      using Type = int;\n"
+                                "      Type value;\n"
+                                "   } h;\n"
+                                "};\n"
+                                "[tu4.cpp]\n"
+                                "struct Widget { // sizeof=8\n"
+                                "   template<> struct (anonymous namespace)::Holder<int> { // sizeof=8\n"
+                                "      using Type = int;\n"
+                                "      Type value;\n"
+                                "      int extra;\n"
+                                "   } h;\n"
+                                "};\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
+
+    {"Used as a data-member where the partial specialization differs", []
+        {
+            std::string code1 = "namespace { template<class T> struct Holder { T value; }; template<class T> struct Holder<T*> { T* p; }; } struct Widget { Holder<int*> h; };";
+            std::string code2 = "namespace { template<class T> struct Holder { T value; }; template<class T> struct Holder<T*> { T* p; int extra; }; } struct Widget { Holder<int*> h; };";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(1, maps.udtMap.size());
+            Assert::AreEqual(0, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(0, maps.typedefMap.size());
+            Assert::AreEqual(0, maps.functionMap.size());
+
+            {
+                auto it = maps.udtMap.begin();
+                Assert::AreEqual("struct Widget { // sizeof=8\n"
+                                 "   template<> struct (anonymous namespace)::Holder<int *> { // sizeof=8\n"
+                                 "      int *p;\n"
+                                 "   } h;\n"
+                                 "};"
+                               , (*it++).second[0].fullyQualified, "serialization");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: Widget\n"
+                                "[tu3.cpp]\n"
+                                "struct Widget { // sizeof=8\n"
+                                "   template<> struct (anonymous namespace)::Holder<int *> { // sizeof=8\n"
+                                "      int *p;\n"
+                                "   } h;\n"
+                                "};\n"
+                                "[tu4.cpp]\n"
+                                "struct Widget { // sizeof=16\n"
+                                "   template<> struct (anonymous namespace)::Holder<int *> { // sizeof=16\n"
+                                "      int *p;\n"
+                                "      int extra;\n"
+                                "   } h;\n"
+                                "};\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
+    {"NonTypeTemplateParmDecl: Pointer NTTP, used as a data-member", []
+        {
+            std::string code1 = "namespace { int x; template<int* P> struct Holder { int value; }; } struct Widget { Holder<&x> h; };";
+            std::string code2 = "namespace { int x; template<int* P> struct Holder { int value; int extra; }; } struct Widget { Holder<&x> h; };";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(1, maps.udtMap.size());
+            Assert::AreEqual(0, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(0, maps.typedefMap.size());
+            Assert::AreEqual(0, maps.functionMap.size());
+
+            {
+                auto it = maps.udtMap.begin();
+                Assert::AreEqual("struct Widget { // sizeof=4\n"
+                                 "   template<> struct (anonymous namespace)::Holder<&(anonymous namespace)::x> { // sizeof=4\n"
+                                 "      int value;\n"
+                                 "   } h;\n"
+                                 "};"
+                               , (*it++).second[0].fullyQualified, "serialization");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: Widget\n"
+                                "[tu3.cpp]\n"
+                                "struct Widget { // sizeof=4\n"
+                                "   template<> struct (anonymous namespace)::Holder<&(anonymous namespace)::x> { // sizeof=4\n"
+                                "      int value;\n"
+                                "   } h;\n"
+                                "};\n"
+                                "[tu4.cpp]\n"
+                                "struct Widget { // sizeof=8\n"
+                                "   template<> struct (anonymous namespace)::Holder<&(anonymous namespace)::x> { // sizeof=8\n"
+                                "      int value;\n"
+                                "      int extra;\n"
+                                "   } h;\n"
+                                "};\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
+
+
+};
+
+#ifdef TESTS
+
+## 6. `NonTypeTemplateParmDecl` (pointer)
+
+Purpose: Pointer NTTP.
+
+```cpp
+std::string code1 = "namespace { int x; template<int* P> struct Holder { int value; }; } struct Widget { Holder<&x> h; };";
+std::string code2 = "namespace { int x; template<int* P> struct Holder { int value; int extra; }; } struct Widget { Holder<&x> h; };";
+```
+
+## 7. `NonTypeTemplateParmDecl` (reference)
+
+Purpose: Reference NTTP.
+
+```cpp
+std::string code1 = "namespace { constexpr int x = 1; template<const int& R> struct Holder { int value; }; } struct Widget { Holder<x> h; };";
+std::string code2 = "namespace { constexpr int x = 1; template<const int& R> struct Holder { int value; int extra; }; } struct Widget { Holder<x> h; };";
+```
+
+## 8. `NonTypeTemplateParmDecl` (member pointer)
+
+Purpose: Member - pointer NTTP.
+
+```cpp
+std::string code1 = "namespace { struct X { int a; }; template<int X::* M> struct Holder { int value; }; } struct Widget { Holder<&X::a> h; };";
+std::string code2 = "namespace { struct X { int a; }; template<int X::* M> struct Holder { int value; int extra; }; } struct Widget { Holder<&X::a> h; };";
+```
+
+## 9. `TemplateTemplateParmDecl`
+
+Purpose: Template - template parameters.
+
+```cpp
+std::string code1 = "namespace { template<class T> struct Holder { T value; }; template<template<class> class TT> struct Outer { TT<int> h; }; } Outer<Holder> x;";
+std::string code2 = "namespace { template<class T> struct Holder { T value; T extra; }; template<template<class> class TT> struct Outer { TT<int> h; }; } Outer<Holder> x;";
+```
+
+## 10. `AliasTemplateDecl`
+
+Purpose: Alias template differs.
+
+```cpp
+std::string code1 = "namespace { template<class T> struct Holder { T value; }; template<class T> using A = Holder<T>; } struct Widget { A<int> h; };";
+std::string code2 = "namespace { template<class T> struct Holder { T value; }; template<class T> using A = Holder<T*>; } struct Widget { A<int> h; };";
+```
+
+## 11. `TypeAliasDecl` (`using`)
+
+    Purpose: Alias declaration differs.
+
+    ```cpp
+    std::string code1 = "namespace { using I = int; template<class T> struct Holder { T value; }; } struct Widget { Holder<I> h; };";
+std::string code2 = "namespace { using I = long; template<class T> struct Holder { T value; }; } struct Widget { Holder<I> h; };";
+```
+
+## 12. `TypedefDecl`
+
+Purpose: `typedef` differs.
+
+```cpp
+std::string code1 = "namespace { typedef int I; template<class T> struct Holder { T value; }; } struct Widget { Holder<I> h; };";
+std::string code2 = "namespace { typedef long I; template<class T> struct Holder { T value; }; } struct Widget { Holder<I> h; };";
+```
+
+## 13. `DependentNameType`
+
+Purpose: Dependent type serialization.
+
+```cpp
+std::string code1 = "namespace { struct X { using type = int; }; template<class T> struct Holder { typename T::type value; }; } struct Widget { Holder<X> h; };";
+std::string code2 = "namespace { struct X { using type = long; }; template<class T> struct Holder { typename T::type value; }; } struct Widget { Holder<X> h; };";
+```
+
+#endif

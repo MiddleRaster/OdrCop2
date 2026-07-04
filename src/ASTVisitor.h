@@ -94,7 +94,7 @@ namespace OdrCop2
             {
                 std::string key = recordDecl->getQualifiedNameAsString();
                      if (recordDecl->getDescribedClassTemplate())                            key += "<>";
-                else if (auto* CTSD = dyn_cast<ClassTemplateSpecializationDecl>(recordDecl)) key += TemplateArgsToString(CTSD->getTemplateArgs(), true);
+                else if (auto* CTSD = dyn_cast<ClassTemplateSpecializationDecl>(recordDecl)) key += TemplateArgsToString(CTSD, true);
 
                 maps.udtMap[key].push_back({TU, ConstructRecordSignature(recordDecl)});
             }
@@ -200,7 +200,7 @@ namespace OdrCop2
             {
                 auto* spec = llvm::cast<clang::ClassTemplateSpecializationDecl>(record);
                 out += spec->getQualifiedNameAsString();
-                out += IndentBlock(TemplateArgsToString(spec->getTemplateArgs()), out.size());
+                out += IndentBlock(TemplateArgsToString(spec), out.size());
                 out = out.substr(0, out.size() - 1); // strip off last "\n"
                 out += " " + key;
             }
@@ -320,7 +320,7 @@ namespace OdrCop2
                     const auto* spec = llvm::dyn_cast<ClassTemplateSpecializationDecl>(recordType->getDecl());
                     out += ics.ConstructPrefix();
                     out += spec->getQualifiedNameAsString();
-                    out += IndentBlock(TemplateArgsToString(spec->getTemplateArgs(), false), out.size() - (out.rfind('\n')+1));
+                    out += IndentBlock(TemplateArgsToString(spec, false), out.size() - (out.rfind('\n') + 1));
                     out  = out.substr(0, out.size() - 2); // strip ";\n"
                     out += ">" + ics.ConstructPointersAndReferences();
                     continue;
@@ -528,7 +528,7 @@ namespace OdrCop2
                 {
                     std::string name;
                     if (const auto* ctsd = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(recordDecl))
-                        name = ctsd->getNameAsString() + TemplateArgsToString(ctsd->getTemplateArgs()); // include template instantiations
+                        name = ctsd->getNameAsString() + TemplateArgsToString(ctsd); // include template instantiations
                     else
                         name = recordDecl->getNameAsString();
                     parent = name + "::" + parent;
@@ -552,15 +552,26 @@ namespace OdrCop2
             return parent + "(unnamed enum: " + firstEnumName + ")";
         }
 
-        std::string TemplateArgsToString(const clang::TemplateArgumentList& args, bool wantAnonymousNamespaceWithTU=false)
+        std::string TemplateArgsToString(const clang::ClassTemplateSpecializationDecl* ctsd, bool wantAnonymousNamespaceWithTU = false)
         {
             std::string out;
             out += "<";
+
+            const clang::TemplateArgumentList &   args = ctsd->getTemplateArgs();
+            const clang::TemplateParameterList* params = ctsd->getSpecializedTemplate()->getTemplateParameters();
 
             for (unsigned i=0; i<args.size(); ++i)
             {
                 if (i > 0)
                     out += ", ";
+
+                const clang::NamedDecl * paramDecl = params->getParam(i);
+                if (const auto* nttp = dyn_cast<NonTypeTemplateParmDecl>(paramDecl); nttp)
+                {
+                    QualType paramType = nttp->getType();
+                    if (paramType->isPointerType())
+                        out += "&";
+                }
 
                 const clang::TemplateArgument& arg = args[i];
                 switch (arg.getKind())
@@ -608,7 +619,7 @@ namespace OdrCop2
                             else if (isReference)
                                 out += "& ";
                         }
-                    }
+                    } 
                     out += vd->getQualifiedNameAsString();
                     break;
                 }
@@ -995,7 +1006,7 @@ namespace OdrCop2
                 {
                     const auto* spec = dyn_cast<ClassTemplateSpecializationDecl>(recordType->getDecl());
                     fqn += ics.ConstructPrefix() + spec->getQualifiedNameAsString();
-                    fqn += IndentBlock(TemplateArgsToString(spec->getTemplateArgs(), false), fqn.size());
+                    fqn += IndentBlock(TemplateArgsToString(spec, false), fqn.size());
                     fqn  = fqn.substr(0, fqn.size()-2); // strip last ";\n"
                     fqn += ">" + ics.ConstructPointersAndReferences();
                 }
@@ -1443,7 +1454,7 @@ namespace OdrCop2
             // if it's a template instantiation, add <arg> 
             if (auto* CTSD = dyn_cast<ClassTemplateSpecializationDecl>(recordDecl))
             {
-                out += IndentBlock(TemplateArgsToString(CTSD->getTemplateArgs()), out.size());
+                out += IndentBlock(TemplateArgsToString(CTSD), out.size());
                 out  = out.substr(0, out.size()-1); // strip off last "\n"
             }
 
@@ -1800,7 +1811,7 @@ namespace OdrCop2
                             {
                                 out += ics.ConstructPrefix();
                                 out += spec->getQualifiedNameAsString();
-                                out += IndentBlock(TemplateArgsToString(spec->getTemplateArgs(), false), out.size() - (out.rfind('\n')+1));
+                                out += IndentBlock(TemplateArgsToString(spec, false), out.size() - (out.rfind('\n') + 1));
                                 out  = out.substr(0, out.size()-2); // strip ";\n"
                                 out += ">" + ics.ConstructPointersAndReferences();
 
