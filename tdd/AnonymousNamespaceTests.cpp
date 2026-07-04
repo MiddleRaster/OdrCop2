@@ -2195,5 +2195,123 @@ Test AnonymousObject[] =
             }
         }
     },
+};
 
+Test AnonymousVars[] =
+{
+    {"Used to initialize an external-linkage global variable", []
+        {
+            std::string code1 = "namespace { struct Config { int width; int height;            }; const Config gInternal = {640, 480    }; } const Config& gExternal = gInternal;";
+            std::string code2 = "namespace { struct Config { int width; int height; int depth; }; const Config gInternal = {640, 480, 32}; } const Config& gExternal = gInternal;";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(0, maps.udtMap.size());
+            Assert::AreEqual(1, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(0, maps.typedefMap.size());
+            Assert::AreEqual(0, maps.functionMap.size());
+
+            auto it = maps.varMap.begin();
+            Assert::AreEqual("const struct (anonymous namespace)::Config { // sizeof=8\n"
+                             "         int width;\n"
+                             "         int height;\n"
+                             "      } & gExternal;"
+                           , (*it++).second[0].fullyQualified, "serialization");
+
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(1, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: gExternal\n"
+                                "[tu3.cpp]\n"
+                                "const struct (anonymous namespace)::Config { // sizeof=8\n"
+                                "         int width;\n"
+                                "         int height;\n"
+                                "      } & gExternal;\n"
+                                "[tu4.cpp]\n"
+                                "const struct (anonymous namespace)::Config { // sizeof=12\n"
+                                "         int width;\n"
+                                "         int height;\n"
+                                "         int depth;\n"
+                                "      } & gExternal;\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
+    {"Used to as a NTTP argument (C++ 20+, a 'structural type')", []
+        {
+            std::string code1 = "namespace { struct Config { int width; int height;            }; constexpr Config gConfig{640, 480    }; } template<const Config& C> struct S {}; S<gConfig> s;";
+            std::string code2 = "namespace { struct Config { int width; int height; int depth; }; constexpr Config gConfig{640, 480, 32}; } template<const Config& C> struct S {}; S<gConfig> s;";
+
+            OdrCop2::AllMaps maps;
+            bool ok = clang::tooling::runToolOnCodeWithArgs(std::make_unique<OdrCop2::VisitorAction>(maps), code1, {"-x", "c++", "-std=c++23"}, "tu1.cpp");
+            Assert::IsTrue(ok);
+
+            Assert::AreEqual(2, maps.udtMap.size());
+            Assert::AreEqual(1, maps.varMap.size());
+            Assert::AreEqual(0, maps.enumMap.size());
+            Assert::AreEqual(0, maps.typedefMap.size());
+            Assert::AreEqual(0, maps.functionMap.size());
+
+            {
+                auto it = maps.udtMap.begin();
+                Assert::AreEqual("template<const struct (anonymous namespace)::Config { // sizeof=8\n"
+                                 "                  int width;\n"
+                                 "                  int height;\n"
+                                 "               } & C> struct S {\n"
+                                 "};"
+                               , (*it++).second[0].fullyQualified, "serialization");
+                Assert::AreEqual("template<> struct S<const struct (anonymous namespace)::Config { // sizeof=8\n"
+                                 "                             int width;\n"
+                                 "                             int height;\n"
+                                 "                          } & (anonymous namespace)::gConfig> { // sizeof=1\n"
+                                 "};"
+                    , (*it++).second[0].fullyQualified, "serialization");
+            }
+            {
+                auto it = maps.varMap.begin();
+                Assert::AreEqual("S<const struct (anonymous namespace)::Config { // sizeof=8\n"
+                                 "           int width;\n"
+                                 "           int height;\n"
+                                 "        } & (anonymous namespace)::gConfig> s;"
+                               , (*it++).second[0].fullyQualified, "serialization");
+            }
+            {
+                const auto& [violations, output] = RunTest(code1, code2);
+                Assert::AreEqual(2, violations, "wrong number of ODR violations");
+                Assert::AreEqual("\n"
+                                "ODR VIOLATION: S<>\n"
+                                "[tu3.cpp]\n"
+                                "template<const struct (anonymous namespace)::Config { // sizeof=8\n"
+                                "                  int width;\n"
+                                "                  int height;\n"
+                                "               } & C> struct S {\n"
+                                "};\n"
+                                "[tu4.cpp]\n"
+                                "template<const struct (anonymous namespace)::Config { // sizeof=12\n"
+                                "                  int width;\n"
+                                "                  int height;\n"
+                                "                  int depth;\n"
+                                "               } & C> struct S {\n"
+                                "};\n"
+                                "\n"
+                                "ODR VIOLATION: s\n"
+                                "[tu3.cpp]\n"
+                                "S<const struct (anonymous namespace)::Config { // sizeof=8\n"
+                                "           int width;\n"
+                                "           int height;\n"
+                                "        } & (anonymous namespace)::gConfig> s;\n"
+                                "[tu4.cpp]\n"
+                                "S<const struct (anonymous namespace)::Config { // sizeof=12\n"
+                                "           int width;\n"
+                                "           int height;\n"
+                                "           int depth;\n"
+                                "        } & (anonymous namespace)::gConfig> s;\n"
+                              , output, "mismatched output");
+            }
+        }
+    },
 };

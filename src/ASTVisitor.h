@@ -196,6 +196,14 @@ namespace OdrCop2
             }
             else if (record && record->isLambda())
                 out += "auto " + key;
+            else if (record && llvm::isa<clang::ClassTemplateSpecializationDecl>(record))
+            {
+                auto* spec = llvm::cast<clang::ClassTemplateSpecializationDecl>(record);
+                out += spec->getQualifiedNameAsString();
+                out += IndentBlock(TemplateArgsToString(spec->getTemplateArgs()), out.size());
+                out = out.substr(0, out.size() - 1); // strip off last "\n"
+                out += " " + key;
+            }
             else if (const auto* enumTy = dyn_cast<clang::EnumType>(qt.getTypePtr()); enumTy && enumTy->getDecl()->isInAnonymousNamespace())
             {
                 out += cvPrefix + ConstructEnumDefinition(enumTy->getDecl());
@@ -208,7 +216,7 @@ namespace OdrCop2
                 if (auto* elemRec = elem->getAsCXXRecordDecl()) {
                     out += cvPrefix;
                     out += IndentBlock(ConstructRecordSignature(elemRec), out.size());
-                    out = out.substr(0, out.size() - 2); // strip last ";\n"
+                    out = out.substr(0, out.size()-2); // strip off last ";\n"
                 }
                 else if (auto* elemEnumTy = dyn_cast<clang::EnumType>(elem.getTypePtr()))
                     out += cvPrefix + ConstructEnumDefinition(elemEnumTy->getDecl());
@@ -549,7 +557,7 @@ namespace OdrCop2
             std::string out;
             out += "<";
 
-            for (unsigned i = 0; i < args.size(); ++i)
+            for (unsigned i=0; i<args.size(); ++i)
             {
                 if (i > 0)
                     out += ", ";
@@ -572,8 +580,39 @@ namespace OdrCop2
                         out += llvm::toString(arg.getAsIntegral(), 10);
                     break;
                 }
+                case clang::TemplateArgument::Declaration:
+                {
+                    const ValueDecl* vd   = arg.getAsDecl();
+
+                    IndirectionCvStripper ics(vd->getType().getCanonicalType());
+                    QualType baseQT       = ics.GetBaseType();
+                    const Type* baseTy    = baseQT.getTypePtr();
+                    if (const auto* recTy = dyn_cast<RecordType>(baseTy))
+                    {
+                        const auto* recDecl = recTy->getDecl();
+                        if (recDecl->isInAnonymousNamespace())
+                        {
+                            out += ics.ConstructPrefix();
+                            out += IndentBlock(ConstructRecordSignature(dyn_cast<CXXRecordDecl>(recDecl)), out.size() - (out.rfind('\n')+1));
+                            out  = out.substr(0, out.size()-2); // strip ";\n"
+                            out += ics.ConstructPointersAndReferences();
+
+                            // Clang has a weird way of specifying when it's a reference
+                            QualType argType     = arg.getAsDecl()->getType();
+                            bool isPointer       = argType->isPointerType();
+                            bool isMemberPointer = argType->isMemberPointerType(); // already encoded in the type
+                            bool isReference     = !isPointer && !isMemberPointer;
+                            out += " ";
+                            if (isPointer)
+                                out += "* ";
+                            else if (isReference)
+                                out += "& ";
+                        }
+                    }
+                    out += vd->getQualifiedNameAsString();
+                    break;
+                }
                 case clang::TemplateArgument::NullPtr:           out += "nullptr";                                                                                    break;
-                case clang::TemplateArgument::Declaration:       out += arg.getAsDecl()->getQualifiedNameAsString();                                                  break;
                 case clang::TemplateArgument::Null:              out += "null";                                                                                       break;
                 case clang::TemplateArgument::Template:          out += arg.getAsTemplate().getAsTemplateDecl()->getQualifiedNameAsString();                          break;
                 case clang::TemplateArgument::TemplateExpansion: out += arg.getAsTemplateOrTemplatePattern().getAsTemplateDecl()->getQualifiedNameAsString() + "..."; break;
@@ -631,13 +670,26 @@ namespace OdrCop2
                             break;
                         }
                         default:
-                            out += "?"; break;
+                        {
+                            std::string tmp;
+                            llvm::raw_string_ostream os(tmp);
+                            pe.print(printPolicy, os, true);
+                            out += os.str();
+                            break;
+                        }
                         }
                     }
                     out += "}";
                     break;
                 }
-                default: out += "?"; break;
+                default:
+                {
+                    std::string tmp;
+                    llvm::raw_string_ostream os(tmp);
+                    arg.print(printPolicy, os, true);
+                    out += os.str();
+                    break;
+                }
                 }
             }
             out += ">";
@@ -1705,15 +1757,63 @@ namespace OdrCop2
                         out += "=";
                         out += defaultType.getAsString(printPolicy);
                     }
+                    continue;
                 }
-                else if (const auto* nttp = clang::dyn_cast<clang::NonTypeTemplateParmDecl>(param))
+                if (const auto* nttp = clang::dyn_cast<clang::NonTypeTemplateParmDecl>(param))
                 {
+                    bool handled = false;
+
                     const auto* enumTy = dyn_cast<clang::EnumType>(nttp->getType().getTypePtr());
                     if (enumTy && enumTy->getDecl()->isInAnonymousNamespace()) {
                         out += ConstructEnumDefinition(enumTy->getDecl());
                         if (!nttp->getName().empty())
                             out += " " + nttp->getName().str();
-                    } else {
+                        handled = true;
+                    }
+
+                    if (handled == false)
+                    {   // NTTP where type is a struct (new to C++20)
+
+                        QualType nttpQT = nttp->getType().getCanonicalType();
+
+                        IndirectionCvStripper ics(nttpQT);
+                        QualType baseQT    = ics.GetBaseType();
+                        const Type* baseTy = baseQT.getTypePtr();
+
+                        // Anonymous-namespace UDT NTTP
+                        if (const auto* recTy = llvm::dyn_cast<clang::RecordType>(baseTy))
+                        {
+                            const auto* recDecl = recTy->getDecl();
+                            if (recDecl->isInAnonymousNamespace())
+                            {
+                                out += ics.ConstructPrefix();
+                                out += IndentBlock(ConstructRecordSignature(llvm::dyn_cast<CXXRecordDecl>(recDecl)), out.size() - (out.rfind('\n')+1));
+                                out  = out.substr(0, out.size()-2); // strip ";\n"
+                                out += ics.ConstructPointersAndReferences();
+
+                                if (!nttp->getName().empty())
+                                    out += " " + nttp->getName().str();
+
+                                handled = true;
+                            }
+                            else if (const auto* spec = llvm::dyn_cast<ClassTemplateSpecializationDecl>(recDecl))
+                            {
+                                out += ics.ConstructPrefix();
+                                out += spec->getQualifiedNameAsString();
+                                out += IndentBlock(TemplateArgsToString(spec->getTemplateArgs(), false), out.size() - (out.rfind('\n')+1));
+                                out  = out.substr(0, out.size()-2); // strip ";\n"
+                                out += ">" + ics.ConstructPointersAndReferences();
+
+                                if (!nttp->getName().empty())
+                                    out += " " + nttp->getName().str();
+
+                                handled = true;
+                            }
+                        }
+                    }
+                    
+                    if (handled == false) // still unhandled? Use fallback
+                    {
                         std::string declStr;
                         llvm::raw_string_ostream declStream(declStr);
                         nttp->getType().print(declStream, printPolicy, nttp->getName());
@@ -1727,8 +1827,9 @@ namespace OdrCop2
                         nttp->getDefaultArgument().getArgument().getAsExpr()->printPretty(defaultStream, nullptr, printPolicy);
                         out += "=" + defaultStr;
                     }
+                    continue;
                 }
-                else if (const auto* ttp2 = clang::dyn_cast<clang::TemplateTemplateParmDecl>(param))
+                if (const auto* ttp2 = clang::dyn_cast<clang::TemplateTemplateParmDecl>(param))
                 {
                     out += "template<";
                     const clang::TemplateParameterList* innerParams = ttp2->getTemplateParameters();
@@ -1759,6 +1860,7 @@ namespace OdrCop2
                         ttp2->getDefaultArgument().getArgument().getAsTemplate().print(defaultStream, printPolicy);
                         out += "=" + defaultStr;
                     }
+                    continue;
                 }
             }
             out += "> ";
